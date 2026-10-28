@@ -393,3 +393,4 @@ with tab_about:
         "Cloud profile storage and prediction history are not connected yet. "
         "They can be added after the local application works correctly."
     )
+
