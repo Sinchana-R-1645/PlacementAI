@@ -1,5 +1,4 @@
 from pathlib import Path
-import html
 import json
 from datetime import datetime, timezone
 
@@ -28,18 +27,16 @@ JOB_DATA_PATH = BASE_DIR / "data" / "job_roles.csv"
 
 
 # ============================================================
-# STYLING
+# MODERN DASHBOARD STYLING
 # ============================================================
 
 st.markdown(
     """
     <style>
-    @import url(
-        'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap'
-    );
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
     html, body, [class*="css"] {
-        font-family: Inter, sans-serif;
+        font-family: 'Inter', sans-serif;
     }
 
     .stApp {
@@ -51,7 +48,7 @@ st.markdown(
     }
 
     [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #111a32, #101426);
+        background: linear-gradient(180deg, #111a32 0%, #101426 100%);
         border-right: 1px solid #273452;
     }
 
@@ -61,27 +58,24 @@ st.markdown(
 
     .hero {
         background: linear-gradient(120deg, #18284d, #25245a 60%, #173e55);
-        padding: 30px;
+        padding: 34px;
         border: 1px solid #394875;
-        border-radius: 20px;
-        margin-bottom: 22px;
-        box-sizing: border-box;
-        min-width: 0;
+        border-radius: 22px;
+        margin-bottom: 24px;
     }
 
     .hero h1 {
-        color: white;
-        font-size: 32px;
+        color: #ffffff;
+        font-size: 36px;
         font-weight: 800;
         margin: 0 0 10px 0;
-        overflow-wrap: anywhere;
     }
 
     .hero p {
         color: #d0dcff;
         font-size: 15px;
+        margin: 0;
         line-height: 1.8;
-        overflow-wrap: anywhere;
     }
 
     .eyebrow {
@@ -94,76 +88,58 @@ st.markdown(
     }
 
     .section-heading {
-        font-size: 22px;
+        font-size: 23px;
         font-weight: 750;
         color: #f3f6ff;
-        margin: 22px 0 12px;
-        overflow-wrap: anywhere;
+        margin: 24px 0 14px 0;
     }
 
-    .metric-card,
-    .feature-card {
+    .metric-card {
         background: linear-gradient(145deg, #17223c, #151b30);
         border: 1px solid #2c3b5b;
         border-radius: 16px;
         padding: 20px;
+        min-height: 120px;
         margin-bottom: 12px;
-        box-sizing: border-box;
-        min-width: 0;
-        max-width: 100%;
-        height: auto;
-        overflow: visible;
-        overflow-wrap: anywhere;
-    }
-
-    .metric-card {
-        min-height: 115px;
-    }
-
-    .feature-card {
-        min-height: 155px;
     }
 
     .metric-label {
         color: #a9b8d7;
         font-size: 13px;
-        margin-bottom: 10px;
-        overflow-wrap: anywhere;
+        margin-bottom: 12px;
     }
 
     .metric-value {
-        color: white;
-        font-size: 25px;
+        color: #ffffff;
+        font-size: 27px;
         font-weight: 800;
-        line-height: 1.5;
-        white-space: normal !important;
-        overflow: visible !important;
-        overflow-wrap: anywhere !important;
-        word-break: normal !important;
-        text-overflow: clip !important;
-        max-width: 100%;
-        height: auto !important;
-        max-height: none !important;
+    }
+
+    .feature-card {
+        background: linear-gradient(145deg, #17223c, #12182a);
+        border: 1px solid #2b3b5d;
+        border-radius: 17px;
+        padding: 21px;
+        min-height: 170px;
+        margin-bottom: 10px;
     }
 
     .feature-icon {
-        font-size: 27px;
-        margin-bottom: 10px;
+        font-size: 28px;
+        margin-bottom: 12px;
     }
 
     .feature-title {
         color: #f2f5ff;
-        font-size: 17px;
         font-weight: 750;
+        font-size: 17px;
         margin-bottom: 8px;
-        overflow-wrap: anywhere;
     }
 
     .feature-description {
         color: #aebcda;
         font-size: 13px;
         line-height: 1.7;
-        overflow-wrap: anywhere;
     }
 
     .info-banner {
@@ -173,7 +149,6 @@ st.markdown(
         padding: 15px;
         color: #dce8ff;
         margin: 12px 0;
-        overflow-wrap: anywhere;
     }
 
     div.stButton > button {
@@ -181,8 +156,12 @@ st.markdown(
         min-height: 42px;
         font-weight: 650;
         border: 1px solid #526ca4;
-        white-space: normal;
-        height: auto;
+        transition: 0.2s ease;
+    }
+
+    div.stButton > button:hover {
+        border-color: #8fb6ff;
+        color: #ffffff;
     }
 
     div[data-testid="stForm"] {
@@ -194,7 +173,6 @@ st.markdown(
 
     h1, h2, h3 {
         color: #f4f6ff;
-        overflow-wrap: anywhere;
     }
 
     p, label {
@@ -204,23 +182,16 @@ st.markdown(
     [data-testid="stMetric"] {
         background: #151e33;
         border: 1px solid #293956;
-        padding: 14px;
+        padding: 16px;
         border-radius: 13px;
-        min-width: 0;
-    }
-
-    [data-testid="stMetricValue"] {
-        white-space: normal !important;
-        overflow-wrap: anywhere !important;
     }
 
     .footer {
         color: #8191b1;
         font-size: 12px;
         text-align: center;
-        padding: 25px 0 10px;
+        padding: 25px 0 10px 0;
     }
-
     </style>
     """,
     unsafe_allow_html=True,
@@ -228,7 +199,7 @@ st.markdown(
 
 
 # ============================================================
-# AUTHENTICATION AND SUPABASE SESSION
+# AUTHENTICATION
 # ============================================================
 
 if "student_id" not in st.session_state:
@@ -242,7 +213,7 @@ try:
     refresh_token = st.session_state.get("refresh_token")
 
     if not access_token or not refresh_token:
-        raise RuntimeError("Login session is missing or expired.")
+        raise RuntimeError("Your login session is missing.")
 
     supabase.auth.set_session(access_token, refresh_token)
 
@@ -252,9 +223,6 @@ except Exception:
         "student_email",
         "access_token",
         "refresh_token",
-        "last_prediction",
-        "last_gap_analysis",
-        "pending_page",
     ):
         st.session_state.pop(key, None)
 
@@ -272,42 +240,18 @@ student_email = st.session_state.get("student_email", "")
 
 @st.cache_resource
 def load_model():
-    if not MODEL_PATH.is_file():
-        raise FileNotFoundError(str(MODEL_PATH))
-
     bundle = joblib.load(MODEL_PATH)
 
     if isinstance(bundle, dict) and "model" in bundle:
-        model_object = bundle["model"]
-    else:
-        model_object = bundle
+        return bundle["model"]
 
-    if not hasattr(model_object, "predict"):
-        raise TypeError(
-            "The saved model does not have a predict() method."
-        )
-
-    return model_object
+    return bundle
 
 
 @st.cache_data
 def load_datasets():
-    if not PLACEMENT_DATA_PATH.is_file():
-        raise FileNotFoundError(str(PLACEMENT_DATA_PATH))
-
-    if not JOB_DATA_PATH.is_file():
-        raise FileNotFoundError(str(JOB_DATA_PATH))
-
     placement_df = pd.read_csv(PLACEMENT_DATA_PATH)
     jobs_df = pd.read_csv(JOB_DATA_PATH)
-
-    placement_df.columns = (
-        placement_df.columns.astype(str).str.strip()
-    )
-    jobs_df.columns = (
-        jobs_df.columns.astype(str).str.strip()
-    )
-
     return placement_df, jobs_df
 
 
@@ -315,19 +259,20 @@ try:
     model = load_model()
     placement_df, jobs_df = load_datasets()
 
-except Exception as error:
-    st.error("Unable to load the model or required CSV files.")
-    st.code(str(error))
+except FileNotFoundError as error:
+    st.error(f"Required project file not found: {error}")
     st.info(
-        "Check models/placement_model.pkl and both CSV files "
+        "Check models/placement_model.pkl and the CSV files "
         "inside the data folder."
     )
     st.stop()
 
+except Exception as error:
+    st.error(f"Could not load the model or datasets: {error}")
+    st.stop()
 
-# ============================================================
-# JOB DATA VALIDATION
-# ============================================================
+
+jobs_df.columns = jobs_df.columns.astype(str).str.strip()
 
 required_job_columns = [
     "Job Title",
@@ -343,33 +288,19 @@ missing_columns = [
 ]
 
 if missing_columns:
-    st.error(
-        "Missing columns in data/job_roles.csv: "
-        + ", ".join(missing_columns)
-    )
+    st.error(f"Missing columns in job_roles.csv: {missing_columns}")
     st.stop()
 
 for column in required_job_columns:
-    jobs_df[column] = jobs_df[column].fillna("").astype(str)
+    jobs_df[column] = jobs_df[column].fillna("")
+
+jobs_df["Job Title"] = jobs_df["Job Title"].astype(str)
 
 job_titles = sorted(
-    title.strip()
-    for title in jobs_df["Job Title"].unique()
+    title
+    for title in jobs_df["Job Title"].unique().tolist()
     if title.strip()
 )
-
-PREDICTION_FEATURES = [
-    "CGPA",
-    "Internships",
-    "Projects",
-    "Workshops/Certifications",
-    "AptitudeTestScore",
-    "SoftSkillsRating",
-    "ExtracurricularActivities",
-    "PlacementTraining",
-    "SSC_Marks",
-    "HSC_Marks",
-]
 
 
 # ============================================================
@@ -377,7 +308,7 @@ PREDICTION_FEATURES = [
 # ============================================================
 
 def cloud_select(table_name):
-    """Return records owned by the current student."""
+    """Return rows belonging to the currently authenticated student."""
     return (
         supabase.table(table_name)
         .select("*")
@@ -387,17 +318,13 @@ def cloud_select(table_name):
 
 
 def cloud_save(table_name, record):
-    """Insert a record belonging to the current student."""
+    """Save a record associated with the authenticated student."""
     payload = {
         **record,
         "user_id": student_id,
     }
 
-    return (
-        supabase.table(table_name)
-        .insert(payload)
-        .execute()
-    )
+    return supabase.table(table_name).insert(payload).execute()
 
 
 def get_student_profile():
@@ -415,12 +342,7 @@ def get_student_profile():
     return {}
 
 
-def save_student_profile(
-    full_name,
-    course,
-    graduation_year,
-    skills,
-):
+def save_student_profile(full_name, course, graduation_year, skills):
     existing = get_student_profile()
 
     payload = {
@@ -447,147 +369,64 @@ def save_student_profile(
     )
 
 
-def save_history(action, result, details, confidence=None):
+def save_history(action, result, details):
+    """Persist prediction or analysis history in Supabase."""
     return cloud_save(
         "placementai_prediction_history",
         {
             "action": action,
             "prediction": str(result),
-            "confidence": confidence,
+            "confidence": None,
             "input_data": details,
         },
     )
 
 
-def get_sorted_history():
-    """Return this student's saved history with newest records first."""
-    response = cloud_select("placementai_prediction_history")
-    records = response.data or []
-
-    return sorted(
-        records,
-        key=lambda item: str(item.get("created_at") or ""),
-        reverse=True,
-    )
-
-
-def normalize_skills(value):
+def normalize_skills(skills_text):
+    """Convert comma-separated skills into normalized skill names."""
     return {
         skill.strip().casefold()
-        for skill in str(value).split(",")
+        for skill in str(skills_text).split(",")
         if skill.strip()
     }
 
 
-def display_value(value):
-    if isinstance(value, dict):
-        return ", ".join(
-            f"{str(key).replace('_', ' ').title()}: "
-            f"{display_value(item)}"
-            for key, item in value.items()
-        )
+def render_saved_details(details):
+    """Display saved analysis details in a readable format."""
+    if isinstance(details, str):
+        try:
+            details = json.loads(details)
+        except (json.JSONDecodeError, TypeError):
+            st.write(details)
+            return
 
-    if isinstance(value, list):
-        return ", ".join(display_value(item) for item in value)
+    if not isinstance(details, dict):
+        st.write(details)
+        return
 
-    if value is None:
-        return "Not available"
+    for key, value in details.items():
+        label = key.replace("_", " ").title()
 
-    return str(value)
-
-
-def get_prediction_input(raw_data):
-    """
-    Align the input DataFrame with the model's expected feature names
-    when feature_names_in_ is available.
-    """
-    frame = pd.DataFrame([raw_data])
-
-    expected_features = getattr(model, "feature_names_in_", None)
-
-    if expected_features is not None:
-        expected_features = list(expected_features)
-
-        missing = [
-            feature
-            for feature in expected_features
-            if feature not in frame.columns
-        ]
-
-        extra = [
-            feature
-            for feature in frame.columns
-            if feature not in expected_features
-        ]
-
-        if missing or extra:
-            raise ValueError(
-                f"Model expects features: {expected_features}. "
-                f"Missing: {missing}. Extra: {extra}. "
-                "Update the prediction form to match the model's "
-                "training features."
-            )
-
-        frame = frame[expected_features]
-
-    return frame
-
-
-def safe_error(error):
-    """Show a useful error message without exposing credentials."""
-    st.caption(f"{type(error).__name__}: {error}")
-
-
-def get_latest_display_result(history):
-    """
-    Prefer the latest unsaved placement prediction from this session.
-    Otherwise, show the newest saved record from Supabase.
-    """
-    current_prediction = st.session_state.get("last_prediction")
-
-    if current_prediction:
-        return str(
-            current_prediction.get("prediction") or "Result unavailable"
-        )
-
-    if history:
-        return str(
-            history[0].get("prediction") or "Result unavailable"
-        )
-
-    return "Not started"
+        if isinstance(value, (list, dict)):
+            st.write(f"**{label}:**")
+            st.json(value)
+        else:
+            st.write(f"**{label}:** {value}")
 
 
 # ============================================================
 # SIDEBAR NAVIGATION
 # ============================================================
 
-PAGES = [
-    "🏠 Dashboard",
-    "👤 Student Profile",
-    "📊 Placement Prediction",
-    "💼 Job Role Recommendations",
-    "🧩 Skill Gap Analysis",
-    "☁️ Cloud Storage",
-]
-
-pending_page = st.session_state.pop("pending_page", None)
-
-if pending_page in PAGES:
-    st.session_state["dashboard_page"] = pending_page
-
-if st.session_state.get("dashboard_page") not in PAGES:
-    st.session_state["dashboard_page"] = PAGES[0]
-
 with st.sidebar:
     st.markdown(
         """
-        <div style="padding:12px 0 24px">
-            <div style="font-size:34px">🎓</div>
-            <div style="font-size:25px;font-weight:800">
+        <div style="padding: 22px 0 18px 0;">
+            <div style="font-size: 34px;">🎓</div>
+            <h1 style="font-size: 30px; margin-bottom: 4px;">
                 PlacementAI
-            </div>
-            <div style="color:#9cafd3;font-size:12px">
+            </h1>
+            <div style="color: #8fb6ff; font-size: 13px;">
                 YOUR CAREER COMPANION
             </div>
         </div>
@@ -595,107 +434,72 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
-    st.caption("WORKSPACE")
+    st.markdown("### WORKSPACE")
 
     page = st.radio(
-        "Dashboard Menu",
-        PAGES,
-        key="dashboard_page",
+        "Navigate",
+        [
+            "🏠 Dashboard",
+            "👤 Student Profile",
+            "📊 Placement Prediction",
+            "💼 Job Role Recommendations",
+            "🧩 Skill Gap Analysis",
+            "☁️ Cloud Storage",
+        ],
         label_visibility="collapsed",
     )
 
     st.divider()
-    st.markdown("**SIGNED-IN STUDENT**")
-    st.caption(student_email or student_id)
+    st.markdown("### SIGNED-IN STUDENT")
+    st.write(student_email or "Student")
 
-    st.caption(
-        "Private student workspace · Streamlit and Supabase"
-    )
-
-    if st.button("🚪 Log out", use_container_width=True):
+    if st.button("🚪 Log Out", use_container_width=True):
         try:
             supabase.auth.sign_out()
         except Exception:
             pass
 
-        # Clear session state, including cached page-level results.
-        st.session_state.clear()
+        for key in (
+            "student_id",
+            "student_email",
+            "access_token",
+            "refresh_token",
+        ):
+            st.session_state.pop(key, None)
+
         st.rerun()
 
 
 # ============================================================
-# DASHBOARD HEADER
-# ============================================================
-
-st.markdown(
-    """
-    <div class="hero">
-        <div class="eyebrow">STUDENT SUCCESS PLATFORM</div>
-        <h1>Build your future with PlacementAI 🚀</h1>
-        <p>
-            Predict placement outcomes, discover suitable IT careers,
-            identify skill gaps, and securely store your progress.
-        </p>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-
-
-# ============================================================
-# HOME DASHBOARD
+# DASHBOARD
 # ============================================================
 
 if page == "🏠 Dashboard":
 
-    welcome = (
-        "Welcome back, " + html.escape(student_email) + "!"
-        if student_email
-        else "Welcome back!"
-    )
-
     st.markdown(
-        f"""
-        <div class="section-heading">{welcome}</div>
-        <p style="color:#aebcda">
-            Your academic progress and career preparation in one place.
-        </p>
+        """
+        <div class="hero">
+            <div class="eyebrow">YOUR CAREER COMPANION</div>
+            <h1>Welcome to PlacementAI 🎓</h1>
+            <p>
+                Predict placement readiness, explore career paths,
+                identify skill gaps, and follow a personalized learning plan.
+            </p>
+        </div>
         """,
         unsafe_allow_html=True,
     )
 
-    try:
-        profile = get_student_profile()
-    except Exception as error:
-        profile = {}
-        st.warning("Could not load your profile.")
-        safe_error(error)
-
-    try:
-        history = get_sorted_history()
-    except Exception as error:
-        history = []
-        st.warning("Could not load your saved history.")
-        safe_error(error)
-
-    # FIX: Do not truncate the result to 35 characters.
-    # FIX: Use sorted history so an older record is not displayed
-    # just because Supabase returned it first.
-    latest = get_latest_display_result(history)
-
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        profile_status = (
-            "Complete" if profile.get("full_name") else "Get started"
-        )
-
         st.markdown(
-            f"""
-            <div class="metric-card">
-                <div class="metric-label">👤 PROFILE</div>
-                <div class="metric-value">
-                    {html.escape(profile_status)}
+            """
+            <div class="feature-card">
+                <div class="feature-icon">📊</div>
+                <div class="feature-title">Placement Prediction</div>
+                <div class="feature-description">
+                    Estimate placement readiness from your profile.
                 </div>
             </div>
             """,
@@ -704,10 +508,13 @@ if page == "🏠 Dashboard":
 
     with col2:
         st.markdown(
-            f"""
-            <div class="metric-card">
-                <div class="metric-label">📈 SAVED ANALYSES</div>
-                <div class="metric-value">{len(history)}</div>
+            """
+            <div class="feature-card">
+                <div class="feature-icon">💼</div>
+                <div class="feature-title">Career Recommendations</div>
+                <div class="feature-description">
+                    Explore job roles, required skills, and certifications.
+                </div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -715,96 +522,45 @@ if page == "🏠 Dashboard":
 
     with col3:
         st.markdown(
-            f"""
-            <div class="metric-card">
-                <div class="metric-label">🎯 LATEST RESULT</div>
-                <div class="metric-value" style="font-size:18px;">
-                    {html.escape(latest)}
+            """
+            <div class="feature-card">
+                <div class="feature-icon">🧩</div>
+                <div class="feature-title">Skill Gap Roadmap</div>
+                <div class="feature-description">
+                    Discover missing skills and follow a guided study plan.
                 </div>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-    st.markdown(
-        '<div class="section-heading">Explore your workspace</div>',
-        unsafe_allow_html=True,
-    )
+    try:
+        profile = get_student_profile()
 
-    cards = [
-        (
-            "📊",
-            "Placement Prediction",
-            "Estimate your placement status using academic details.",
-            "📊 Placement Prediction",
-        ),
-        (
-            "💼",
-            "Job Recommendations",
-            "Explore IT roles and their required skills.",
-            "💼 Job Role Recommendations",
-        ),
-        (
-            "🧩",
-            "Skill Gap Analysis",
-            "Compare your current skills with job requirements.",
-            "🧩 Skill Gap Analysis",
-        ),
-        (
-            "👤",
-            "Student Profile",
-            "Save your academic profile and skills.",
-            "👤 Student Profile",
-        ),
-        (
-            "☁️",
-            "Cloud Storage",
-            "View your profile and career history.",
-            "☁️ Cloud Storage",
-        ),
-    ]
+        st.markdown("### Your profile")
 
-    for start in range(0, len(cards), 2):
-        row_cards = cards[start:start + 2]
-        columns = st.columns(2)
+        if profile:
+            col1, col2, col3 = st.columns(3)
+            col1.metric(
+                "Course",
+                profile.get("course") or "Not specified",
+            )
+            col2.metric(
+                "Graduation year",
+                profile.get("graduation_year") or "Not specified",
+            )
+            col3.metric(
+                "Skills listed",
+                len(normalize_skills(profile.get("skills", ""))),
+            )
+        else:
+            st.info(
+                "Complete your Student Profile to personalize your experience."
+            )
 
-        for column, card in zip(columns, row_cards):
-            icon, title, description, target = card
-
-            with column:
-                st.markdown(
-                    f"""
-                    <div class="feature-card">
-                        <div class="feature-icon">{icon}</div>
-                        <div class="feature-title">
-                            {html.escape(title)}
-                        </div>
-                        <div class="feature-description">
-                            {html.escape(description)}
-                        </div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
-
-                if st.button(
-                    f"Open {title} →",
-                    key=f"open_{start}_{title}",
-                    use_container_width=True,
-                ):
-                    st.session_state["pending_page"] = target
-                    st.rerun()
-
-    st.markdown(
-        """
-        <div class="info-banner">
-            💡 Keep your profile updated and use skill-gap analysis
-            to plan what to learn next. Predictions are estimates,
-            not guarantees of employment.
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    except Exception as error:
+        st.warning("Could not load your profile.")
+        st.caption(str(error))
 
 
 # ============================================================
@@ -815,58 +571,59 @@ elif page == "👤 Student Profile":
 
     st.header("👤 Student Profile")
     st.write(
-        "Maintain your academic information and current skills."
+        "Maintain your academic information and current skills. "
+        "Your profile is saved to your authenticated Supabase account."
     )
 
     try:
         profile = get_student_profile()
     except Exception as error:
         profile = {}
-        st.error("Could not load the cloud profile.")
-        safe_error(error)
+        st.warning("Could not load your saved profile.")
+        st.caption(str(error))
 
     with st.form("student_profile_form"):
         full_name = st.text_input(
             "Full name",
-            value=str(profile.get("full_name") or ""),
+            value=profile.get("full_name", ""),
         )
 
         course = st.text_input(
             "Course / Degree",
-            value=str(profile.get("course") or ""),
-            placeholder="Example: B.E. Computer Science",
+            value=profile.get("course", ""),
+            placeholder="B.Tech Computer Science",
         )
 
+        current_year = datetime.now().year
+        saved_year = profile.get("graduation_year", current_year + 1)
+
         try:
-            existing_year = int(
-                profile.get("graduation_year") or 2027
-            )
+            saved_year = int(saved_year)
         except (ValueError, TypeError):
-            existing_year = 2027
+            saved_year = current_year + 1
 
         graduation_year = st.number_input(
             "Graduation year",
-            min_value=2000,
-            max_value=2100,
-            value=max(2000, min(2100, existing_year)),
+            min_value=current_year,
+            max_value=current_year + 10,
+            value=min(max(saved_year, current_year), current_year + 10),
             step=1,
         )
 
         skills = st.text_area(
-            "Current skills",
-            value=str(profile.get("skills") or ""),
-            placeholder="Python, SQL, HTML, CSS",
+            "Current skills (comma-separated)",
+            value=profile.get("skills", ""),
+            placeholder="Python, SQL, Communication, HTML",
         )
 
-        submitted = st.form_submit_button(
-            "☁️ Save Profile to Cloud",
+        save_profile = st.form_submit_button(
+            "💾 Save Student Profile",
             use_container_width=True,
-            type="primary",
         )
 
-    if submitted:
+    if save_profile:
         if not full_name.strip():
-            st.warning("Please enter your full name.")
+            st.error("Please enter your full name.")
         else:
             try:
                 save_student_profile(
@@ -875,11 +632,11 @@ elif page == "👤 Student Profile":
                     graduation_year,
                     skills,
                 )
-                st.success("Your profile was saved.")
+                st.success("Your profile has been saved.")
                 st.rerun()
             except Exception as error:
                 st.error("Could not save your profile.")
-                safe_error(error)
+                st.caption(str(error))
 
 
 # ============================================================
@@ -891,236 +648,116 @@ elif page == "📊 Placement Prediction":
     st.header("📊 Placement Prediction")
 
     st.write(
-        "Enter your academic details to obtain an estimate "
-        "from your trained machine-learning model."
+        "Enter your academic and placement-preparation details "
+        "to estimate your placement readiness."
     )
 
-    st.info(
-        "A model prediction is an estimate, not a guarantee "
-        "of real-world placement."
-    )
+    feature_columns = list(placement_df.columns)
+
+    target_candidates = [
+        column
+        for column in feature_columns
+        if column.casefold() in {
+            "placement",
+            "placed",
+            "placement_status",
+            "status",
+            "target",
+        }
+    ]
+
+    target_column = target_candidates[-1] if target_candidates else None
+
+    if target_column:
+        feature_columns = [
+            column
+            for column in feature_columns
+            if column != target_column
+        ]
+
+    profile = {}
+    try:
+        profile = get_student_profile()
+    except Exception:
+        pass
 
     with st.form("placement_prediction_form"):
-        left, right = st.columns(2)
+        input_data = {}
 
-        with left:
-            cgpa = st.number_input(
-                "CGPA",
-                min_value=0.0,
-                max_value=10.0,
-                value=7.5,
-                step=0.1,
-            )
+        columns = st.columns(2)
 
-            internships = st.number_input(
-                "Number of internships",
-                min_value=0,
-                max_value=20,
-                value=1,
-                step=1,
-            )
+        for index, column in enumerate(feature_columns):
+            series = placement_df[column]
+            with columns[index % 2]:
+                if pd.api.types.is_numeric_dtype(series):
+                    median_value = pd.to_numeric(
+                        series,
+                        errors="coerce",
+                    ).median()
 
-            projects = st.number_input(
-                "Number of projects",
-                min_value=0,
-                max_value=50,
-                value=2,
-                step=1,
-            )
+                    if pd.isna(median_value):
+                        median_value = 0.0
 
-            workshops = st.number_input(
-                "Workshops / Certifications",
-                min_value=0,
-                max_value=50,
-                value=2,
-                step=1,
-            )
+                    input_data[column] = st.number_input(
+                        column.replace("_", " ").title(),
+                        value=float(median_value),
+                    )
+                else:
+                    choices = [
+                        str(value)
+                        for value in series.dropna().unique().tolist()
+                    ]
 
-            aptitude = st.slider(
-                "Aptitude test score",
-                min_value=0,
-                max_value=100,
-                value=70,
-            )
+                    if not choices:
+                        choices = ["Unknown"]
 
-        with right:
-            soft_skills = st.slider(
-                "Soft skills rating",
-                min_value=0.0,
-                max_value=5.0,
-                value=3.5,
-                step=0.5,
-            )
-
-            extracurricular = st.selectbox(
-                "Extracurricular activities",
-                ["Yes", "No"],
-            )
-
-            training = st.selectbox(
-                "Placement training",
-                ["Yes", "No"],
-            )
-
-            ssc_marks = st.slider(
-                "SSC marks (%)",
-                min_value=0,
-                max_value=100,
-                value=80,
-            )
-
-            hsc_marks = st.slider(
-                "HSC marks (%)",
-                min_value=0,
-                max_value=100,
-                value=80,
-            )
-
-        predict_button = st.form_submit_button(
-            "🚀 Predict Placement Status",
-            use_container_width=True,
-            type="primary",
-        )
-
-    if predict_button:
-        raw_data = {
-            "CGPA": cgpa,
-            "Internships": internships,
-            "Projects": projects,
-            "Workshops/Certifications": workshops,
-            "AptitudeTestScore": aptitude,
-            "SoftSkillsRating": soft_skills,
-            "ExtracurricularActivities": extracurricular,
-            "PlacementTraining": training,
-            "SSC_Marks": ssc_marks,
-            "HSC_Marks": hsc_marks,
-        }
-
-        try:
-            student_data = get_prediction_input(raw_data)
-            prediction = model.predict(student_data)[0]
-
-            confidence = None
-
-            if hasattr(model, "predict_proba"):
-                try:
-                    probabilities = model.predict_proba(student_data)[0]
-                    classes = list(model.classes_)
-
-                    matching_class = next(
-                        (
-                            index
-                            for index, label in enumerate(classes)
-                            if label == prediction
-                        ),
-                        None,
+                    input_data[column] = st.selectbox(
+                        column.replace("_", " ").title(),
+                        choices,
                     )
 
-                    if matching_class is not None:
-                        confidence = round(
-                            float(probabilities[matching_class]) * 100,
-                            2,
-                        )
-
-                except (
-                    AttributeError,
-                    ValueError,
-                    TypeError,
-                    IndexError,
-                ):
-                    confidence = None
-
-            clean_inputs = {
-                str(key): (
-                    value.item()
-                    if hasattr(value, "item")
-                    else value
-                )
-                for key, value in student_data.iloc[0].to_dict().items()
-            }
-
-            # FIX: Update the result immediately in session state.
-            # The dashboard can now show it without requiring a
-            # separate page reload or a database save first.
-            st.session_state["last_prediction"] = {
-                "prediction": str(prediction),
-                "confidence": confidence,
-                "input_data": clean_inputs,
-            }
-
-        except Exception as error:
-            st.error(
-                "Prediction failed. Verify the model's feature names, "
-                "input types, and training-time preprocessing."
-            )
-            safe_error(error)
-
-    # Render the result outside the submit-button condition.
-    last_prediction = st.session_state.get("last_prediction")
-
-    if last_prediction:
-        prediction = last_prediction["prediction"]
-        confidence = last_prediction["confidence"]
-
-        st.markdown("### Your prediction")
-
-        if prediction.strip().casefold() in {
-            "placed",
-            "yes",
-            "1",
-            "true",
-        }:
-            st.success(f"Model prediction: {prediction}")
-        else:
-            st.warning(f"Model prediction: {prediction}")
-
-        if confidence is not None:
-            st.metric(
-                "Model confidence for predicted class",
-                f"{confidence:.2f}%",
-            )
-            st.caption(
-                "This model score is not the actual probability "
-                "that you will get a job."
-            )
-
-        st.markdown("#### Academic details used")
-
-        st.dataframe(
-            pd.DataFrame(
-                [
-                    {"Field": key, "Value": value}
-                    for key, value in last_prediction["input_data"].items()
-                ]
-            ),
+        predict_clicked = st.form_submit_button(
+            "🔮 Predict Placement Readiness",
             use_container_width=True,
-            hide_index=True,
         )
 
-        if st.button(
-            "☁️ Save Prediction to Cloud",
-            key="save_prediction",
-            use_container_width=True,
-            type="primary",
-        ):
+    if predict_clicked:
+        try:
+            prediction_frame = pd.DataFrame(
+                [input_data],
+                columns=feature_columns,
+            )
+
+            prediction = model.predict(prediction_frame)[0]
+
+            confidence = None
+            if hasattr(model, "predict_proba"):
+                probabilities = model.predict_proba(prediction_frame)[0]
+                confidence = round(float(max(probabilities)) * 100, 2)
+
+            st.markdown("### Prediction Result")
+            st.success(f"Predicted result: **{prediction}**")
+
+            if confidence is not None:
+                st.metric("Model confidence", f"{confidence:.1f}%")
+
             try:
                 save_history(
                     "placement_prediction",
                     prediction,
-                    last_prediction["input_data"],
-                    confidence,
+                    {
+                        "input_data": input_data,
+                        "confidence": confidence,
+                    },
                 )
-
-                # Keep the result available in session state.
-                # The dashboard will display it immediately.
-                st.success(
-                    "Placement prediction saved to Cloud Storage."
-                )
-                st.rerun()
-
+                st.caption("Prediction saved to your cloud history.")
             except Exception as error:
-                st.error("Could not save the prediction.")
-                safe_error(error)
+                st.warning("Prediction was made but could not be saved.")
+                st.caption(str(error))
+
+        except Exception as error:
+            st.error("Could not generate a placement prediction.")
+            st.caption(str(error))
 
 
 # ============================================================
@@ -1130,285 +767,699 @@ elif page == "📊 Placement Prediction":
 elif page == "💼 Job Role Recommendations":
 
     st.header("💼 Job Role Recommendations")
-    st.write("Explore roles using your job-role dataset.")
+
+    st.write(
+        "Explore job roles, their descriptions, required skills, "
+        "and suggested certifications."
+    )
 
     if not job_titles:
-        st.warning("No job titles were found in job_roles.csv.")
+        st.warning("No job roles are available in job_roles.csv.")
+
     else:
         selected_job = st.selectbox(
-            "Choose an IT job role",
+            "Choose a job role",
             job_titles,
             key="recommendation_job",
         )
 
-        selected_rows = jobs_df[
-            jobs_df["Job Title"].str.strip() == selected_job
+        job = jobs_df[
+            jobs_df["Job Title"] == selected_job
+        ].iloc[0]
+
+        st.markdown(f"### {selected_job}")
+
+        description = str(job["Job Description"]).strip()
+        st.write(description or "No description is available.")
+
+        required_skills = [
+            item.strip()
+            for item in str(job["Skills"]).split(",")
+            if item.strip()
         ]
 
-        if not selected_rows.empty:
-            job = selected_rows.iloc[0]
+        certifications = [
+            item.strip()
+            for item in str(job["Certifications"]).split(",")
+            if item.strip()
+        ]
 
-            st.markdown(f"### {html.escape(job['Job Title'])}")
-            st.markdown("#### Job description")
-            st.write(
-                job["Job Description"] or "No description available."
-            )
+        left, right = st.columns(2)
 
-            required_skills = [
-                item.strip()
-                for item in job["Skills"].split(",")
-                if item.strip()
-            ]
+        with left:
+            st.markdown("#### Required skills")
+            if required_skills:
+                for skill in required_skills:
+                    st.write(f"• {skill}")
+            else:
+                st.info("No skills listed for this role.")
 
-            certifications = [
-                item.strip()
-                for item in job["Certifications"].split(",")
-                if item.strip()
-            ]
+        with right:
+            st.markdown("#### Suggested certifications")
+            if certifications:
+                for certification in certifications:
+                    st.write(f"• {certification}")
+            else:
+                st.info("No certifications listed.")
 
-            left, right = st.columns(2)
-
-            with left:
-                st.markdown("#### Required skills")
-
-                if required_skills:
-                    for skill in required_skills:
-                        st.write(f"• {skill}")
-                else:
-                    st.info("No skills listed.")
-
-            with right:
-                st.markdown("#### Suggested certifications")
-
-                if certifications:
-                    for certification in certifications:
-                        st.write(f"• {certification}")
-                else:
-                    st.info("No certifications listed.")
-
-            if st.button(
-                "☁️ Save Job Role to Cloud History",
-                key="save_job_role",
-                use_container_width=True,
-                type="primary",
-            ):
-                try:
-                    save_history(
-                        "job_recommendation",
-                        selected_job,
-                        {
-                            "job_title": selected_job,
-                            "skills": required_skills,
-                            "certifications": certifications,
-                            "job_description": job["Job Description"],
-                        },
-                    )
-
-                    st.success(
-                        "Job recommendation saved to Cloud Storage."
-                    )
-
-                except Exception as error:
-                    st.error("Could not save this recommendation.")
-                    safe_error(error)
-
-
-# ============================================================
-# SKILL GAP ANALYSIS
+        if st.button(
+            "☁️ Save Job Role to Cloud History",
+            key="save_job_role",
+            use_container_width=True,
+        ):
+            try:
+                save_history(
+                    "job_recommendation",
+                    selected_job,
+                    {
+                        "job_title": selected_job,
+                        "skills": required_skills,
+                        "certifications": certifications,
+                    },
+                )
+                st.success("Job recommendation saved.")
+            except Exception as error:
+                st.error("Could not save this recommendation.")
+                st.caption(str(error))
+                # ============================================================
+# SKILL GAP ANALYSIS + GUIDED LEARNING ROADMAP
 # ============================================================
 
 elif page == "🧩 Skill Gap Analysis":
 
-    st.header("🧩 Skill Gap Analysis")
-
+    st.header("🧩 Skill Gap Analysis & Guided Learning Roadmap")
     st.write(
-        "Compare your existing skills with those required by a job role."
+        "Compare your skills with a target job role, learn missing skills "
+        "through daily tasks, practise, build projects, and take a quiz."
     )
 
+    ROADMAP_TABLE = "placementai_skill_roadmaps"
+
+    SKILL_PLANS = {
+        "python": {
+            "url": "https://docs.python.org/3/tutorial/",
+            "hours": 8,
+            "lessons": [
+                ("Day 1: Python basics", "Learn variables, data types, print(), and input().", "Write a program that asks for your name and displays a greeting.", 60),
+                ("Day 2: Conditions and loops", "Practise if/else, for loops, while loops, and range().", "Print a multiplication table and classify numbers.", 60),
+                ("Day 3: Lists and dictionaries", "Learn lists, tuples, sets, dictionaries, and iteration.", "Store five marks and calculate their average.", 60),
+                ("Day 4: Functions", "Learn parameters, return values, and reusable functions.", "Write functions to calculate average marks and grades.", 60),
+                ("Day 5: Files and errors", "Read files and handle exceptions using try/except.", "Read marks from a file and handle invalid input.", 60),
+                ("Day 6: Practice", "Solve beginner programming problems.", "Solve five problems using loops, collections, and functions.", 90),
+                ("Day 7: Mini-project", "Combine the concepts learned throughout the week.", "Build a Student Marks Analyser that calculates grades and identifies the topper.", 90),
+            ],
+            "quiz": [
+                ("Which data structure stores ordered, changeable items?", ["List", "Tuple", "Set", "Integer"], 0),
+                ("What does return do in a function?", ["Repeats a loop", "Returns a result to the caller", "Imports a module", "Creates a variable"], 1),
+                ("Which statement handles exceptions?", ["if", "for", "try/except", "print"], 2),
+            ],
+            "project": [
+                "Ask the user for student names and marks.",
+                "Validate marks and store student records.",
+                "Write functions to calculate averages and grades.",
+                "Display the class average and highest-scoring student.",
+                "Test invalid inputs and optionally export results to CSV.",
+            ],
+        },
+        "sql": {
+            "url": "https://sqlbolt.com/",
+            "hours": 6,
+            "lessons": [
+                ("Day 1: SELECT and FROM", "Understand tables, rows, columns, SELECT, and FROM.", "Select specific columns from a sample student table.", 45),
+                ("Day 2: Filtering", "Practise WHERE, AND, OR, LIKE, IN, and ORDER BY.", "Find students above a selected mark and sort the results.", 60),
+                ("Day 3: Aggregates", "Learn COUNT, SUM, AVG, MIN, MAX, and GROUP BY.", "Calculate average marks by department.", 60),
+                ("Day 4: JOIN operations", "Understand primary keys, foreign keys, and INNER/LEFT JOIN.", "Join students with their department information.", 60),
+                ("Day 5: Data changes", "Practise INSERT, UPDATE, DELETE, and CREATE TABLE.", "Create a courses table and insert sample records.", 60),
+                ("Day 6: Practice", "Combine filters, aggregates, and joins.", "Write five queries for a student placement report.", 60),
+                ("Day 7: Mini-project", "Create a small SQL reporting project.", "Produce a placement report showing student names, scores, and department averages.", 75),
+            ],
+            "quiz": [
+                ("Which clause filters individual rows?", ["WHERE", "ORDER BY", "SELECT", "LIMIT"], 0),
+                ("Which function counts rows?", ["TOTAL()", "COUNT()", "NUMBER()", "ROWS()"], 1),
+                ("Which JOIN preserves every row from the left table?", ["CROSS JOIN", "INNER JOIN", "LEFT JOIN", "SELF JOIN"], 2),
+            ],
+            "project": [
+                "Create Students, Departments, and Scores tables.",
+                "Insert at least five sample students.",
+                "Write queries to filter students by score.",
+                "Calculate average scores by department.",
+                "Document each query and test the results.",
+            ],
+        },
+        "html": {
+            "url": "https://developer.mozilla.org/en-US/docs/Learn_web_development/Core/Structuring_content",
+            "hours": 4,
+            "lessons": [
+                ("Day 1: HTML structure", "Learn doctype, html, head, title, and body.", "Create a valid webpage with a heading and paragraph.", 30),
+                ("Day 2: Text and links", "Practise headings, lists, links, and emphasis.", "Create an About Me webpage.", 35),
+                ("Day 3: Images and semantic HTML", "Learn image alt text, header, main, section, and footer.", "Organize your webpage into semantic sections.", 35),
+                ("Day 4: Forms and tables", "Learn labels, inputs, buttons, rows, and table headers.", "Build a contact form and education table.", 40),
+                ("Day 5: Mini-project", "Combine the HTML concepts you learned.", "Build a portfolio page with About, Skills, Projects, and Contact sections.", 60),
+            ],
+            "quiz": [
+                ("What is the purpose of image alt text?", ["Set width", "Describe the image accessibly", "Change format", "Set page title"], 1),
+                ("Which element contains the main page content?", ["main", "meta", "head", "title"], 0),
+                ("How is a label associated with an input?", ["Matching for and id", "Matching page titles", "Using image alt", "Using a table caption"], 0),
+            ],
+            "project": [
+                "Create an index.html file.",
+                "Add About, Skills, Projects, and Contact sections.",
+                "Add links to your projects.",
+                "Use meaningful image alt text if images are included.",
+                "Open the page in a browser and fix any layout or markup issues.",
+            ],
+        },
+        "css": {
+            "url": "https://developer.mozilla.org/en-US/docs/Learn_web_development/Core/Styling_basics",
+            "hours": 5,
+            "lessons": [
+                ("Day 1: CSS basics", "Learn selectors, properties, values, and stylesheets.", "Change the colors and fonts of a webpage.", 45),
+                ("Day 2: Box model", "Practise margin, padding, border, and width.", "Create three cards with consistent spacing.", 45),
+                ("Day 3: Flexbox", "Learn display:flex, alignment, and gaps.", "Create a responsive navigation bar.", 45),
+                ("Day 4: Responsive design", "Use media queries and flexible widths.", "Make a page work on mobile and desktop.", 60),
+                ("Day 5: Mini-project", "Combine CSS layout and responsive design.", "Style your portfolio with cards, navigation, and a mobile layout.", 75),
+            ],
+            "quiz": [
+                ("Which property changes text color?", ["font-size", "color", "padding", "display"], 1),
+                ("Which CSS layout is useful for one-dimensional alignment?", ["Flexbox", "SQL", "HTML", "JSON"], 0),
+                ("What does padding control?", ["Space inside an element's border", "Text content", "Database rows", "Page title"], 0),
+            ],
+            "project": [
+                "Create a separate styles.css file.",
+                "Style headings, text, buttons, and links.",
+                "Use Flexbox to arrange project cards.",
+                "Add a media query for small screens.",
+                "Test the page at desktop and mobile widths.",
+            ],
+        },
+        "javascript": {
+            "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide",
+            "hours": 8,
+            "lessons": [
+                ("Day 1: Variables and values", "Learn let, const, strings, numbers, and booleans.", "Create a calculator for two numbers.", 60),
+                ("Day 2: Conditions and loops", "Practise if/else, for, and while.", "Print numbers and classify even and odd values.", 60),
+                ("Day 3: Arrays and objects", "Store and access data in arrays and objects.", "Represent a student using a JavaScript object.", 60),
+                ("Day 4: Functions", "Write reusable functions and arrow functions.", "Create functions for addition, subtraction, and multiplication.", 60),
+                ("Day 5: DOM basics", "Select HTML elements and update their content.", "Make a button change a heading when clicked.", 60),
+                ("Day 6: Practice", "Solve small coding exercises.", "Complete five array, string, and function exercises.", 60),
+                ("Day 7: Mini-project", "Combine JavaScript with HTML and CSS.", "Build an interactive to-do list.", 90),
+            ],
+            "quiz": [
+                ("Which keyword declares a block-scoped variable that can be reassigned?", ["let", "const", "class", "import"], 0),
+                ("Which method selects an element using a CSS selector?", ["document.querySelector()", "console.log()", "JSON.parse()", "Math.round()"], 0),
+                ("Which array method creates a new array by transforming items?", ["map()", "push()", "pop()", "shift()"], 0),
+            ],
+            "project": [
+                "Create an HTML page with a text input and Add button.",
+                "Use JavaScript to read the input value.",
+                "Add new tasks to a list.",
+                "Allow users to mark tasks complete or remove them.",
+                "Test empty inputs and multiple tasks.",
+            ],
+        },
+        "machine learning": {
+            "url": "https://scikit-learn.org/stable/tutorial/index.html",
+            "hours": 10,
+            "lessons": [
+                ("Day 1: ML concepts", "Learn features, labels, training data, and testing data.", "Identify features and labels in a sample dataset.", 60),
+                ("Day 2: Data preparation", "Explore missing values, duplicates, and categorical data.", "Clean a small CSV dataset using pandas.", 75),
+                ("Day 3: Train/test split", "Learn why data is separated for training and evaluation.", "Split a dataset into training and test sets.", 60),
+                ("Day 4: Classification", "Train a simple classification model.", "Train a decision tree classifier.", 75),
+                ("Day 5: Evaluation", "Learn accuracy, precision, recall, and confusion matrices.", "Evaluate a model and explain its errors.", 75),
+                ("Day 6: Practice", "Compare models and avoid data leakage.", "Compare two classifiers using the same test set.", 90),
+                ("Day 7: Mini-project", "Build an end-to-end ML workflow.", "Train and evaluate a model on a public dataset and document its limitations.", 120),
+            ],
+            "quiz": [
+                ("Why keep a test dataset?", ["To evaluate generalization on unseen data", "To increase column names", "To remove all labels", "To replace training"], 0),
+                ("Which metric is the fraction of predictions that are correct?", ["Accuracy", "Recall", "Support", "Feature count"], 0),
+                ("What is data leakage?", ["Using information unavailable at prediction time", "Removing duplicates", "Saving a CSV", "Plotting a chart"], 0),
+            ],
+            "project": [
+                "Choose a public, labelled dataset.",
+                "Inspect missing values and clean the data.",
+                "Split the data into training and test sets.",
+                "Train a baseline classifier.",
+                "Report metrics and describe possible limitations.",
+            ],
+        },
+    }
+
+    def make_generic_plan(skill):
+        return {
+            "url": "https://www.coursera.org/",
+            "hours": 5,
+            "lessons": [
+                ("Day 1: Understand the fundamentals", f"Find an introductory lesson covering the core concepts of {skill}.", f"Write down five important concepts related to {skill}.", 45),
+                ("Day 2: Learn the basic tools", f"Identify the common tools and workflow used for {skill}.", f"Complete one beginner exercise involving {skill}.", 45),
+                ("Day 3: Guided practice", f"Follow a beginner tutorial for {skill}.", f"Repeat the tutorial without copying every step.", 60),
+                ("Day 4: Independent practice", f"Apply {skill} to a small realistic problem.", f"Solve two exercises and note any mistakes.", 60),
+                ("Day 5: Mini-project", f"Build a small project demonstrating {skill}.", f"Document your work and explain what you learned.", 90),
+            ],
+            "quiz": [
+                (f"What is a good first step when learning {skill}?", ["Understand the fundamentals", "Skip all practice", "Avoid examples", "Memorize without understanding"], 0),
+                ("Why should you practise independently?", ["To check whether you can apply concepts", "To avoid learning", "To remove feedback", "To skip fundamentals"], 0),
+                ("What should a project demonstrate?", ["Practical application of the skill", "Only a title", "No working output", "Copied text alone"], 0),
+            ],
+            "project": [
+                f"Define a small problem that can be solved using {skill}.",
+                "Write down the requirements and expected result.",
+                "Complete a beginner tutorial related to the problem.",
+                "Build your own solution and test it.",
+                "Document the result and what you would improve.",
+            ],
+        }
+
+    def get_plan(skill):
+        return SKILL_PLANS.get(skill.casefold(), make_generic_plan(skill))
+
+    def load_skill_roadmap(job_title):
+        result = (
+            supabase.table(ROADMAP_TABLE)
+            .select("*")
+            .eq("user_id", student_id)
+            .eq("job_title", job_title)
+            .execute()
+        )
+        return result.data or []
+
+    def save_skill_roadmap_item(job_title, item):
+        payload = {
+            "user_id": student_id,
+            "job_title": job_title,
+            "skill": item["skill"],
+            "priority": item.get("priority", "Medium"),
+            "learning_stage": item.get("learning_stage", "Beginner"),
+            "estimated_hours": int(item.get("estimated_hours", 5)),
+            "status": item.get("status", "Not Started"),
+            "resource_url": item.get("resource_url", ""),
+            "project_idea": item.get("project_idea", ""),
+            "lessons": item.get("lessons", []),
+            "quiz": item.get("quiz", []),
+            "project_steps": item.get("project_steps", []),
+            "completed_lessons": item.get("completed_lessons", []),
+            "quiz_score": item.get("quiz_score"),
+            "quiz_passed": item.get("quiz_passed", False),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+        return (
+            supabase.table(ROADMAP_TABLE)
+            .upsert(
+                payload,
+                on_conflict="user_id,job_title,skill",
+            )
+            .execute()
+        )
+
+    def delete_skill_roadmap(job_title):
+        return (
+            supabase.table(ROADMAP_TABLE)
+            .delete()
+            .eq("user_id", student_id)
+            .eq("job_title", job_title)
+            .execute()
+        )
+
     if not job_titles:
-        st.warning("No job roles are available.")
+        st.warning("No job roles were found in data/job_roles.csv.")
+
     else:
         selected_job = st.selectbox(
             "Choose your target job role",
             job_titles,
-            key="gap_job",
+            key="skill_gap_job",
         )
 
-        job_rows = jobs_df[
-            jobs_df["Job Title"].str.strip() == selected_job
-        ]
-
-        # Clear stale analysis when the user switches target roles.
-        existing_analysis = st.session_state.get("last_gap_analysis")
-
-        if (
-            existing_analysis
-            and existing_analysis.get("job_title") != selected_job
-        ):
-            st.session_state.pop("last_gap_analysis", None)
+        job_rows = jobs_df[jobs_df["Job Title"] == selected_job]
 
         if job_rows.empty:
-            st.warning("The selected job role could not be found.")
+            st.error("The selected job role could not be found.")
         else:
             job = job_rows.iloc[0]
 
             required_skills = [
-                item.strip()
-                for item in job["Skills"].split(",")
-                if item.strip()
+                skill.strip()
+                for skill in str(job["Skills"]).split(",")
+                if skill.strip()
             ]
 
             try:
                 profile = get_student_profile()
-                default_skills = str(profile.get("skills") or "")
+                default_skills = profile.get("skills", "")
             except Exception:
                 default_skills = ""
 
-            student_skills_text = st.text_area(
-                "Your current skills (separate with commas)",
+            current_skills = st.text_area(
+                "Enter your current skills, separated by commas",
                 value=default_skills,
-                placeholder="Python, SQL, HTML, CSS",
-                key="gap_student_skills",
+                placeholder="Python, SQL, HTML, Communication",
+                key="skill_gap_current_skills",
             )
 
             if st.button(
                 "🔍 Analyze My Skill Gap",
-                key="analyze_skill_gap",
                 type="primary",
                 use_container_width=True,
             ):
-                student_skills = normalize_skills(
-                    student_skills_text
-                )
+                student_skills = normalize_skills(current_skills)
 
-                required_lookup = {
-                    skill.casefold(): skill
-                    for skill in required_skills
-                }
-
-                matched_skills = [
-                    original
-                    for normalized, original in required_lookup.items()
-                    if normalized in student_skills
+                matched = [
+                    skill for skill in required_skills
+                    if skill.casefold() in student_skills
                 ]
 
-                missing_skills = [
-                    original
-                    for normalized, original in required_lookup.items()
-                    if normalized not in student_skills
+                missing = [
+                    skill for skill in required_skills
+                    if skill.casefold() not in student_skills
                 ]
 
-                match_percentage = (
-                    len(matched_skills) / len(required_lookup) * 100
-                    if required_lookup
-                    else 0.0
+                percentage = (
+                    len(matched) / len(required_skills) * 100
+                    if required_skills else 0
                 )
 
                 st.session_state["last_gap_analysis"] = {
                     "job_title": selected_job,
-                    "student_skills": student_skills_text,
-                    "required_skills": list(
-                        required_lookup.values()
-                    ),
-                    "matched_skills": matched_skills,
-                    "missing_skills": missing_skills,
-                    "match_percentage": round(match_percentage, 1),
+                    "current_skills": current_skills,
+                    "required_skills": required_skills,
+                    "matched": matched,
+                    "missing": missing,
+                    "percentage": percentage,
                 }
 
             analysis = st.session_state.get("last_gap_analysis")
 
             if analysis and analysis.get("job_title") == selected_job:
-                st.markdown("### Your analysis")
-                st.caption(
-                    f"Target job role: {analysis['job_title']}"
-                )
+                matched = analysis["matched"]
+                missing = analysis["missing"]
+                percentage = analysis["percentage"]
 
-                col1, col2, col3 = st.columns(3)
+                st.subheader("Your Skill Gap Results")
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Required skills", len(required_skills))
+                c2.metric("Skills matched", len(matched))
+                c3.metric("Skills to learn", len(missing))
 
-                with col1:
-                    st.metric(
-                        "Required skills",
-                        len(analysis["required_skills"]),
-                    )
-
-                with col2:
-                    st.metric(
-                        "Skills matched",
-                        len(analysis["matched_skills"]),
-                    )
-
-                with col3:
-                    st.metric(
-                        "Skills to develop",
-                        len(analysis["missing_skills"]),
-                    )
-
-                st.progress(
-                    int(round(analysis["match_percentage"]))
-                )
-
-                st.write(
-                    f"**Exact skill-name match: "
-                    f"{analysis['match_percentage']:.1f}%**"
-                )
+                st.progress(int(percentage))
+                st.write(f"**Skill match: {percentage:.1f}%**")
 
                 left, right = st.columns(2)
 
                 with left:
                     st.markdown("#### ✅ Skills you have")
-
-                    if analysis["matched_skills"]:
-                        for skill in analysis["matched_skills"]:
+                    if matched:
+                        for skill in matched:
                             st.write(f"• {skill}")
                     else:
-                        st.info("No exact skill matches found.")
+                        st.info("No exact matches found yet.")
 
                 with right:
                     st.markdown("#### 📚 Skills to learn")
-
-                    if analysis["missing_skills"]:
-                        for skill in analysis["missing_skills"]:
+                    if missing:
+                        for skill in missing:
                             st.write(f"• {skill}")
                     else:
-                        st.success(
-                            "All listed skills match your input."
-                        )
-
-                st.caption(
-                    "This uses exact skill-name matching and does not "
-                    "measure proficiency or certify expertise."
-                )
+                        st.success("You have listed all required skills.")
 
                 if st.button(
                     "☁️ Save Skill Gap Analysis",
                     key="save_gap_analysis",
-                    use_container_width=True,
-                    type="primary",
                 ):
                     try:
                         save_history(
                             "skill_gap_analysis",
-                            (
-                                f"{analysis['match_percentage']:.1f}% "
-                                f"match for {analysis['job_title']}"
-                            ),
-                            analysis,
+                            f"{percentage:.1f}% match for {selected_job}",
+                            {
+                                "job_title": selected_job,
+                                "current_skills": current_skills,
+                                "matched_skills": matched,
+                                "missing_skills": missing,
+                                "match_percentage": round(percentage, 1),
+                            },
                         )
-
-                        st.session_state.pop(
-                            "last_gap_analysis", None
-                        )
-
-                        st.success(
-                            "Skill gap analysis saved to Cloud Storage."
-                        )
-                        st.rerun()
-
+                        st.success("Skill-gap analysis saved.")
                     except Exception as error:
-                        st.error(
-                            "Could not save the skill gap analysis."
+                        st.error("Could not save the analysis.")
+                        st.caption(str(error))
+
+                st.divider()
+                st.subheader("🗺️ Your Guided Learning Roadmap")
+
+                if missing:
+                    st.write(
+                        "Generate a guided plan for each missing skill. "
+                        "Each plan includes daily topics, exercises, a project, and a quiz."
+                    )
+
+                    if st.button(
+                        "✨ Generate / Update My Roadmap",
+                        type="primary",
+                        use_container_width=True,
+                    ):
+                        try:
+                            old_items = load_skill_roadmap(selected_job)
+                            old_by_skill = {
+                                item["skill"].casefold(): item
+                                for item in old_items
+                            }
+
+                            for index, skill in enumerate(missing):
+                                plan = get_plan(skill)
+                                old = old_by_skill.get(skill.casefold(), {})
+
+                                item = {
+                                    "skill": skill,
+                                    "priority": "High" if index == 0 else "Medium",
+                                    "learning_stage": "Beginner" if index == 0 else "Intermediate",
+                                    "estimated_hours": plan["hours"],
+                                    "status": old.get("status", "Not Started"),
+                                    "resource_url": plan["url"],
+                                    "project_idea": plan["project"][-1] if plan.get("project") else f"Build a small project using {skill}.",
+                                    "lessons": plan["lessons"],
+                                    "quiz": plan["quiz"],
+                                    "project_steps": plan["project"],
+                                    "completed_lessons": old.get("completed_lessons", []),
+                                    "quiz_score": old.get("quiz_score"),
+                                    "quiz_passed": old.get("quiz_passed", False),
+                                }
+
+                                save_skill_roadmap_item(selected_job, item)
+
+                            st.success("Your guided roadmap has been saved.")
+                            st.rerun()
+
+                        except Exception as error:
+                            st.error(
+                                "Could not generate the roadmap. Check the "
+                                "Supabase table schema and permissions."
+                            )
+                            st.caption(str(error))
+
+                try:
+                    roadmap_items = load_skill_roadmap(selected_job)
+
+                    if not roadmap_items:
+                        st.info(
+                            "Click Generate / Update My Roadmap to create "
+                            "your daily learning plans."
                         )
-                        safe_error(error)
+                    else:
+                        total = len(roadmap_items)
+                        completed = sum(
+                            item.get("status") == "Completed"
+                            for item in roadmap_items
+                        )
+                        total_hours = sum(
+                            int(item.get("estimated_hours") or 0)
+                            for item in roadmap_items
+                        )
+
+                        m1, m2, m3 = st.columns(3)
+                        m1.metric("Roadmap skills", total)
+                        m2.metric("Completed skills", f"{completed}/{total}")
+                        m3.metric("Study hours", total_hours)
+
+                        completion = completed / total * 100 if total else 0
+                        st.progress(int(completion))
+                        st.write(f"**Roadmap completion: {completion:.1f}%**")
+
+                        for item_index, item in enumerate(roadmap_items):
+                            skill = item.get("skill", "Skill")
+                            plan = get_plan(skill)
+
+                            with st.expander(
+                                f"📘 {skill} — {item.get('priority', 'Medium')} priority",
+                                expanded=False,
+                            ):
+                                st.write(
+                                    f"**Estimated time:** "
+                                    f"{item.get('estimated_hours', plan['hours'])} hours"
+                                )
+                                st.write(
+                                    f"**Learning stage:** "
+                                    f"{item.get('learning_stage', 'Beginner')}"
+                                )
+
+                                resource_url = item.get("resource_url") or plan["url"]
+                                st.markdown(
+                                    f"[Open learning reference]({resource_url})"
+                                )
+
+                                st.markdown("### Daily learning schedule")
+
+                                lessons = item.get("lessons") or plan["lessons"]
+                                if isinstance(lessons, str):
+                                    try:
+                                        lessons = json.loads(lessons)
+                                    except json.JSONDecodeError:
+                                        lessons = plan["lessons"]
+
+                                completed_lessons = item.get("completed_lessons") or []
+                                if isinstance(completed_lessons, str):
+                                    try:
+                                        completed_lessons = json.loads(completed_lessons)
+                                    except json.JSONDecodeError:
+                                        completed_lessons = []
+
+                                updated_completed = []
+
+                                for lesson_index, lesson in enumerate(lessons):
+                                    title, topic, exercise, minutes = lesson
+
+                                    is_done = st.checkbox(
+                                        f"{title} ({minutes} minutes)",
+                                        value=lesson_index in completed_lessons,
+                                        key=f"lesson_{selected_job}_{item_index}_{lesson_index}",
+                                    )
+
+                                    st.write(f"**Study:** {topic}")
+                                    st.write(f"**Practice:** {exercise}")
+
+                                    if is_done:
+                                        updated_completed.append(lesson_index)
+
+                                st.markdown("### Mini-project instructions")
+                                project_steps = item.get("project_steps") or plan["project"]
+
+                                if isinstance(project_steps, str):
+                                    try:
+                                        project_steps = json.loads(project_steps)
+                                    except json.JSONDecodeError:
+                                        project_steps = plan["project"]
+
+                                for step_index, step in enumerate(project_steps, 1):
+                                    st.write(f"{step_index}. {step}")
+
+                                st.markdown("### Final quiz")
+
+                                quiz = item.get("quiz") or plan["quiz"]
+                                if isinstance(quiz, str):
+                                    try:
+                                        quiz = json.loads(quiz)
+                                    except json.JSONDecodeError:
+                                        quiz = plan["quiz"]
+
+                                quiz_answers = []
+
+                                for question_index, question in enumerate(quiz):
+                                    question_text, options, correct_index = question[:3]
+
+                                    answer = st.radio(
+                                        question_text,
+                                        options,
+                                        key=f"quiz_{selected_job}_{item_index}_{question_index}",
+                                    )
+                                    quiz_answers.append(options.index(answer))
+
+                                if st.button(
+                                    "🧪 Submit quiz and save progress",
+                                    key=f"submit_{selected_job}_{item_index}",
+                                    use_container_width=True,
+                                ):
+                                    score = sum(
+                                        answer == question[2]
+                                        for answer, question in zip(quiz_answers, quiz)
+                                    )
+                                    passed = score >= max(1, (len(quiz) * 2 + 2) // 3)
+
+                                    updated = {
+                                        **item,
+                                        "completed_lessons": updated_completed,
+                                        "quiz_score": score,
+                                        "quiz_passed": passed,
+                                        "status": (
+                                            "Completed"
+                                            if passed and len(updated_completed) == len(lessons)
+                                            else "In Progress"
+                                        ),
+                                    }
+
+                                    try:
+                                        save_skill_roadmap_item(selected_job, updated)
+                                        st.success(
+                                            f"Quiz score: {score}/{len(quiz)}. "
+                                            + ("Passed!" if passed else "Keep practising and try again.")
+                                        )
+                                        st.rerun()
+                                    except Exception as error:
+                                        st.error("Could not save your quiz progress.")
+                                        st.caption(str(error))
+
+                                st.markdown("### Save lesson progress")
+
+                                status_options = [
+                                    "Not Started",
+                                    "In Progress",
+                                    "Completed",
+                                ]
+
+                                current_status = item.get("status", "Not Started")
+                                status = st.selectbox(
+                                    "Overall skill status",
+                                    status_options,
+                                    index=(
+                                        status_options.index(current_status)
+                                        if current_status in status_options else 0
+                                    ),
+                                    key=f"status_{selected_job}_{item_index}",
+                                )
+
+                                if st.button(
+                                    "💾 Save lesson checkboxes and status",
+                                    key=f"save_lessons_{selected_job}_{item_index}",
+                                    use_container_width=True,
+                                ):
+                                    try:
+                                        updated = {
+                                            **item,
+                                            "completed_lessons": updated_completed,
+                                            "status": status,
+                                        }
+                                        save_skill_roadmap_item(selected_job, updated)
+                                        st.success("Your progress has been saved.")
+                                        st.rerun()
+                                    except Exception as error:
+                                        st.error("Could not save your progress.")
+                                        st.caption(str(error))
+
+                        if st.button(
+                            "🗑️ Reset roadmap for this job role",
+                            key="reset_skill_roadmap",
+                        ):
+                            try:
+                                delete_skill_roadmap(selected_job)
+                                st.success("Roadmap reset.")
+                                st.rerun()
+                            except Exception as error:
+                                st.error("Could not reset the roadmap.")
+                                st.caption(str(error))
+
+                except Exception as error:
+                    st.error(
+                        "Could not load the roadmap from Supabase. "
+                        "Check the table columns, permissions, and RLS policies."
+                    )
+                    st.caption(str(error))
 
 
 # ============================================================
@@ -1417,313 +1468,52 @@ elif page == "🧩 Skill Gap Analysis":
 
 elif page == "☁️ Cloud Storage":
 
-    st.markdown(
-        """
-        <div class="hero">
-            <div class="eyebrow">YOUR PERSONAL WORKSPACE</div>
-            <h1>☁️ Cloud Storage</h1>
-            <p>
-                Review your student profile, placement predictions,
-                job recommendations, and skill-gap analyses.
-            </p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    st.markdown(
-        """
-        <div class="info-banner">
-            🔐 Your saved records are associated with your student account.
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    st.header("☁️ Cloud Storage")
+    st.write("View your saved profile and prediction/analysis history.")
 
     tab_profile, tab_history = st.tabs(
-        ["👤 My Profile", "📚 Saved Analyses & History"]
+        ["👤 Saved Profile", "📚 Prediction & Analysis History"]
     )
 
-    # --------------------------------------------------------
-    # PROFILE TAB
-    # --------------------------------------------------------
-
     with tab_profile:
-        st.markdown("### 👤 My Student Profile")
-
         try:
             profile = get_student_profile()
 
-            if not profile:
-                st.info(
-                    "Your profile has not been saved yet. "
-                    "Open Student Profile to add your information."
-                )
+            if profile:
+                st.write("**Full name:**", profile.get("full_name", ""))
+                st.write("**Course:**", profile.get("course", ""))
+                st.write("**Graduation year:**", profile.get("graduation_year", ""))
+                st.write("**Skills:**", profile.get("skills", ""))
             else:
-                col1, col2 = st.columns(2)
-
-                with col1:
-                    st.markdown(
-                        f"""
-                        <div class="metric-card">
-                            <div class="metric-label">FULL NAME</div>
-                            <div class="metric-value">
-                                {html.escape(str(profile.get("full_name") or "Not provided"))}
-                            </div>
-                        </div>
-                        """,
-                        unsafe_allow_html=True,
-                    )
-
-                with col2:
-                    st.markdown(
-                        f"""
-                        <div class="metric-card">
-                            <div class="metric-label">COURSE</div>
-                            <div class="metric-value">
-                                {html.escape(str(profile.get("course") or "Not provided"))}
-                            </div>
-                        </div>
-                        """,
-                        unsafe_allow_html=True,
-                    )
-
-                col3, col4 = st.columns(2)
-
-                with col3:
-                    st.markdown(
-                        f"""
-                        <div class="metric-card">
-                            <div class="metric-label">GRADUATION YEAR</div>
-                            <div class="metric-value">
-                                {html.escape(str(profile.get("graduation_year") or "Not provided"))}
-                            </div>
-                        </div>
-                        """,
-                        unsafe_allow_html=True,
-                    )
-
-                with col4:
-                    st.markdown(
-                        """
-                        <div class="metric-card">
-                            <div class="metric-label">ACCOUNT STATUS</div>
-                            <div class="metric-value">Active</div>
-                        </div>
-                        """,
-                        unsafe_allow_html=True,
-                    )
-
-                st.markdown("### 🛠️ Your Skills")
-
-                skills = [
-                    item.strip()
-                    for item in str(
-                        profile.get("skills") or ""
-                    ).split(",")
-                    if item.strip()
-                ]
-
-                if skills:
-                    skill_columns = st.columns(3)
-
-                    for index, skill in enumerate(skills):
-                        with skill_columns[index % 3]:
-                            st.markdown(
-                                f"""
-                                <div class="feature-card">
-                                    <div class="feature-icon">✅</div>
-                                    <div class="feature-title">
-                                        {html.escape(skill)}
-                                    </div>
-                                </div>
-                                """,
-                                unsafe_allow_html=True,
-                            )
-                else:
-                    st.info("No skills have been added yet.")
-
-                st.caption(
-                    "Last updated: "
-                    + str(
-                        profile.get("updated_at") or "Not available"
-                    )
-                )
-
+                st.info("No profile saved yet.")
         except Exception as error:
-            st.error("Unable to load your saved profile.")
-            safe_error(error)
-
-    # --------------------------------------------------------
-    # HISTORY TAB
-    # --------------------------------------------------------
+            st.error("Could not load your saved profile.")
+            st.caption(str(error))
 
     with tab_history:
-        st.markdown("### 📚 Your Career History")
-
-        if st.button(
-            "🔄 Refresh History",
-            key="refresh_cloud_history",
-        ):
+        if st.button("🔄 Refresh Cloud History"):
             st.rerun()
 
         try:
-            # FIX: Use the same newest-first ordering as the dashboard.
-            history = get_sorted_history()
+            response = cloud_select("placementai_prediction_history")
+            history = response.data or []
 
             if not history:
-                st.info(
-                    "No saved records yet. Save a prediction, "
-                    "job recommendation, or skill-gap analysis "
-                    "to see it here."
-                )
-            else:
-                st.caption(f"☁️ {len(history)} saved record(s)")
+                st.info("No saved predictions or analyses yet.")
 
-                actions = [
-                    str(item.get("action") or "").lower()
-                    for item in history
-                ]
+            for index, record in enumerate(history):
+                action = str(record.get("action", "Saved record"))
+                result = str(record.get("prediction", ""))
+                created_at = str(record.get("created_at", ""))
 
-                col1, col2, col3 = st.columns(3)
-
-                with col1:
-                    st.metric(
-                        "📊 Predictions",
-                        actions.count("placement_prediction"),
-                    )
-
-                with col2:
-                    st.metric(
-                        "💼 Job Recommendations",
-                        actions.count("job_recommendation"),
-                    )
-
-                with col3:
-                    st.metric(
-                        "🧩 Skill Gap Reports",
-                        actions.count("skill_gap_analysis"),
-                    )
-
-                filter_choice = st.selectbox(
-                    "Filter saved records",
-                    [
-                        "All Records",
-                        "Placement Predictions",
-                        "Job Recommendations",
-                        "Skill Gap Analyses",
-                    ],
-                    key="cloud_history_filter",
-                )
-
-                action_filters = {
-                    "Placement Predictions": "placement_prediction",
-                    "Job Recommendations": "job_recommendation",
-                    "Skill Gap Analyses": "skill_gap_analysis",
-                }
-
-                filtered_history = [
-                    item
-                    for item in history
-                    if (
-                        filter_choice == "All Records"
-                        or str(item.get("action") or "").lower()
-                        == action_filters[filter_choice]
-                    )
-                ]
-
-                if not filtered_history:
-                    st.info("No records match this filter.")
-
-                for index, item in enumerate(filtered_history):
-                    action = str(
-                        item.get("action") or "saved_record"
-                    )
-                    result = str(
-                        item.get("prediction") or "Result unavailable"
-                    )
-                    created_at = str(
-                        item.get("created_at") or "Date unavailable"
-                    )
-
-                    action_info = {
-                        "placement_prediction": (
-                            "📊",
-                            "Placement Prediction",
-                        ),
-                        "job_recommendation": (
-                            "💼",
-                            "Job Recommendation",
-                        ),
-                        "skill_gap_analysis": (
-                            "🧩",
-                            "Skill Gap Analysis",
-                        ),
-                    }
-
-                    icon, title = action_info.get(
-                        action.lower(),
-                        (
-                            "📁",
-                            action.replace("_", " ").title(),
-                        ),
-                    )
-
-                    with st.container(border=True):
-                        left, right = st.columns([3, 1])
-
-                        with left:
-                            st.markdown(f"### {icon} {title}")
-                            st.markdown(f"**Result:** {result}")
-                            st.caption(f"🕒 {created_at}")
-
-                            if item.get("confidence") is not None:
-                                st.caption(
-                                    "Model confidence: "
-                                    f"{item['confidence']}%"
-                                )
-
-                        with right:
-                            st.markdown("**Cloud status**")
-                            st.success("Saved")
-
-                        details = item.get("input_data", {})
-
-                        if isinstance(details, str):
-                            try:
-                                details = json.loads(details)
-                            except (
-                                json.JSONDecodeError,
-                                TypeError,
-                            ):
-                                pass
-
-                        with st.expander("🔍 View Analysis Details"):
-                            if isinstance(details, dict):
-                                if not details:
-                                    st.caption(
-                                        "No additional details saved."
-                                    )
-                                else:
-                                    st.json(details)
-
-                            elif isinstance(details, list):
-                                st.write(details)
-
-                            elif details:
-                                st.write(display_value(details))
-
-                            else:
-                                st.caption(
-                                    "No additional details available."
-                                )
+                with st.expander(
+                    f"{action.replace('_', ' ').title()} — {result} — {created_at}"
+                ):
+                    render_saved_details(record.get("input_data", {}))
 
         except Exception as error:
-            st.error(
-                "Unable to load cloud history. Check your Supabase "
-                "table, permissions, and column names."
-            )
-            safe_error(error)
+            st.error("Could not load cloud history.")
+            st.caption(str(error))
 
 
 # ============================================================
@@ -1734,7 +1524,7 @@ st.markdown(
     """
     <div class="footer">
         PlacementAI · Student Placement & Career Support Platform<br>
-        Machine learning · Career exploration · Cloud-based storage
+        Machine learning · Career exploration · Guided learning roadmap
     </div>
     """,
     unsafe_allow_html=True,
