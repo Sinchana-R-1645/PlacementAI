@@ -841,7 +841,7 @@ elif page == "💼 Job Role Recommendations":
             except Exception as error:
                 st.error("Could not save this recommendation.")
                 st.caption(str(error))
-                # ============================================================
+ # ============================================================
 # SKILL GAP ANALYSIS + GUIDED LEARNING ROADMAP
 # ============================================================
 
@@ -1006,7 +1006,7 @@ elif page == "🧩 Skill Gap Analysis":
 
     def make_generic_plan(skill):
         return {
-            "url": "https://www.coursera.org/",
+            "url": "https://infyspringboard.onwingspan.com/",
             "hours": 5,
             "lessons": [
                 ("Day 1: Understand the fundamentals", f"Find an introductory lesson covering the core concepts of {skill}.", f"Write down five important concepts related to {skill}.", 45),
@@ -1300,9 +1300,10 @@ elif page == "🧩 Skill Gap Analysis":
                                     f"{item.get('learning_stage', 'Beginner')}"
                                 )
 
-                                resource_url = item.get("resource_url") or plan["url"]
-                                st.markdown(
-                                    f"[Open learning reference]({resource_url})"
+                                resource_url = "https://infyspringboard.onwingspan.com/"
+                                st.link_button(
+                                    "Open Infosys Springboard",
+                                     resource_url,
                                 )
 
                                 st.markdown("### Daily learning schedule")
@@ -1350,61 +1351,7 @@ elif page == "🧩 Skill Gap Analysis":
                                 for step_index, step in enumerate(project_steps, 1):
                                     st.write(f"{step_index}. {step}")
 
-                                st.markdown("### Final quiz")
-
-                                quiz = item.get("quiz") or plan["quiz"]
-                                if isinstance(quiz, str):
-                                    try:
-                                        quiz = json.loads(quiz)
-                                    except json.JSONDecodeError:
-                                        quiz = plan["quiz"]
-
-                                quiz_answers = []
-
-                                for question_index, question in enumerate(quiz):
-                                    question_text, options, correct_index = question[:3]
-
-                                    answer = st.radio(
-                                        question_text,
-                                        options,
-                                        key=f"quiz_{selected_job}_{item_index}_{question_index}",
-                                    )
-                                    quiz_answers.append(options.index(answer))
-
-                                if st.button(
-                                    "🧪 Submit quiz and save progress",
-                                    key=f"submit_{selected_job}_{item_index}",
-                                    use_container_width=True,
-                                ):
-                                    score = sum(
-                                        answer == question[2]
-                                        for answer, question in zip(quiz_answers, quiz)
-                                    )
-                                    passed = score >= max(1, (len(quiz) * 2 + 2) // 3)
-
-                                    updated = {
-                                        **item,
-                                        "completed_lessons": updated_completed,
-                                        "quiz_score": score,
-                                        "quiz_passed": passed,
-                                        "status": (
-                                            "Completed"
-                                            if passed and len(updated_completed) == len(lessons)
-                                            else "In Progress"
-                                        ),
-                                    }
-
-                                    try:
-                                        save_skill_roadmap_item(selected_job, updated)
-                                        st.success(
-                                            f"Quiz score: {score}/{len(quiz)}. "
-                                            + ("Passed!" if passed else "Keep practising and try again.")
-                                        )
-                                        st.rerun()
-                                    except Exception as error:
-                                        st.error("Could not save your quiz progress.")
-                                        st.caption(str(error))
-
+                               
                                 st.markdown("### Save lesson progress")
 
                                 status_options = [
@@ -1466,55 +1413,247 @@ elif page == "🧩 Skill Gap Analysis":
 # CLOUD STORAGE
 # ============================================================
 
+
 elif page == "☁️ Cloud Storage":
 
-    st.header("☁️ Cloud Storage")
-    st.write("View your saved profile and prediction/analysis history.")
+    # ---------- PAGE DESIGN ----------
+    st.markdown("""
+    <style>
+    .storage-hero {
+        padding: 28px;
+        border-radius: 18px;
+        background: linear-gradient(120deg, #172554, #4338ca, #6366f1);
+        color: white;
+        margin-bottom: 24px;
+    }
+    .storage-hero h1 {
+        color: white;
+        margin-bottom: 8px;
+        font-size: 30px;
+    }
+    .storage-hero p {
+        color: #e0e7ff;
+        margin-bottom: 0;
+        font-size: 16px;
+    }
+    .storage-card {
+        background: var(--secondary-background-color);
+        padding: 20px;
+        border: 1px solid rgba(128,128,128,0.25);
+        border-radius: 16px;
+        min-height: 125px;
+        margin-bottom: 12px;
+    }
+    .storage-card-title {
+        font-size: 14px;
+        opacity: 0.8;
+        margin-bottom: 8px;
+    }
+    .storage-card-value {
+        font-size: 25px;
+        font-weight: 700;
+        overflow-wrap: anywhere;
+    }
+    .storage-section {
+        padding: 18px;
+        border: 1px solid rgba(128,128,128,0.25);
+        border-radius: 16px;
+        margin-top: 10px;
+        margin-bottom: 16px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
-    tab_profile, tab_history = st.tabs(
-        ["👤 Saved Profile", "📚 Prediction & Analysis History"]
-    )
+    st.markdown("""
+    <div class="storage-hero">
+        <h1>☁️ My Cloud Storage</h1>
+        <p>Your personal PlacementAI workspace — access your saved
+        profile and revisit your placement predictions and analyses.</p>
+    </div>
+    """, unsafe_allow_html=True)
 
+    # ---------- LOAD CLOUD DATA ----------
+    profile = {}
+    history = []
+    profile_error = None
+    history_error = None
+
+    try:
+        profile = get_student_profile()
+    except Exception as error:
+        profile_error = str(error)
+
+    try:
+        response = cloud_select("placementai_prediction_history")
+        history = response.data or []
+    except Exception as error:
+        history_error = str(error)
+
+    # ---------- SUMMARY CARDS ----------
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.markdown("""
+        <div class="storage-card">
+            <div class="storage-card-title">👤 Student Profile</div>
+            <div class="storage-card-value">""" +
+            ("Saved ✓" if profile else "Not saved") + """</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col2:
+        st.markdown("""
+        <div class="storage-card">
+            <div class="storage-card-title">📚 Saved Records</div>
+            <div class="storage-card-value">""" +
+            str(len(history)) + """</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col3:
+        st.markdown("""
+        <div class="storage-card">
+            <div class="storage-card-title">☁️ Storage Status</div>
+            <div class="storage-card-value">""" +
+            ("Connected" if not profile_error and not history_error
+             else "Check connection") + """</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.write("")
+
+    # ---------- TABS ----------
+    tab_profile, tab_history = st.tabs([
+        "👤  My Profile",
+        "📚  Prediction History"
+    ])
+
+    # ---------- PROFILE TAB ----------
     with tab_profile:
-        try:
-            profile = get_student_profile()
+        st.subheader("Your Student Profile")
+        st.caption("Your saved academic and skill information.")
 
-            if profile:
-                st.write("**Full name:**", profile.get("full_name", ""))
-                st.write("**Course:**", profile.get("course", ""))
-                st.write("**Graduation year:**", profile.get("graduation_year", ""))
-                st.write("**Skills:**", profile.get("skills", ""))
-            else:
-                st.info("No profile saved yet.")
-        except Exception as error:
-            st.error("Could not load your saved profile.")
-            st.caption(str(error))
+        if profile_error:
+            st.error("Unable to load your profile from cloud storage.")
+            st.caption(profile_error)
 
+        elif profile:
+            name = profile.get("full_name") or "Not provided"
+            course = profile.get("course") or "Not provided"
+            year = profile.get("graduation_year") or "Not provided"
+            skills = profile.get("skills") or "No skills added yet"
+
+            st.markdown('<div class="storage-section">',
+                        unsafe_allow_html=True)
+
+            st.markdown(f"### 🎓 {name}")
+            st.divider()
+
+            left, right = st.columns(2)
+
+            with left:
+                st.markdown("**📖 Course**")
+                st.write(course)
+
+                st.markdown("**📅 Graduation Year**")
+                st.write(str(year))
+
+            with right:
+                st.markdown("**🛠️ Skills**")
+                st.write(skills)
+
+            updated_at = profile.get("updated_at")
+            if updated_at:
+                st.caption(f"Last updated: {updated_at}")
+
+            st.markdown('</div>', unsafe_allow_html=True)
+
+            st.success("Your profile is available in cloud storage.")
+
+        else:
+            st.info(
+                "Your profile has not been saved yet. "
+                "Complete your profile in PlacementAI to see it here."
+            )
+
+    # ---------- HISTORY TAB ----------
     with tab_history:
-        if st.button("🔄 Refresh Cloud History"):
-            st.rerun()
+        left, right = st.columns([3, 1])
 
-        try:
-            response = cloud_select("placementai_prediction_history")
-            history = response.data or []
+        with left:
+            st.subheader("Your Saved Records")
+            st.caption(
+                "Review your previous placement predictions "
+                "and skill-gap analyses."
+            )
 
-            if not history:
-                st.info("No saved predictions or analyses yet.")
+        with right:
+            if st.button("🔄 Refresh", use_container_width=True):
+                st.rerun()
 
-            for index, record in enumerate(history):
-                action = str(record.get("action", "Saved record"))
-                result = str(record.get("prediction", ""))
-                created_at = str(record.get("created_at", ""))
+        if history_error:
+            st.error("Unable to load your cloud history.")
+            st.caption(history_error)
+
+        elif history:
+            # Show latest records first when timestamps are available.
+            history = sorted(
+                history,
+                key=lambda item: str(item.get("created_at") or ""),
+                reverse=True
+            )
+
+            for index, record in enumerate(history, start=1):
+                action = str(
+                    record.get("action") or "Saved Record"
+                ).replace("_", " ").title()
+
+                result = str(
+                    record.get("prediction") or "No result available"
+                )
+
+                created_at = str(
+                    record.get("created_at") or "Date not available"
+                )
 
                 with st.expander(
-                    f"{action.replace('_', ' ').title()} — {result} — {created_at}"
+                    f"📄 {action}  |  {created_at}",
+                    expanded=(index == 1)
                 ):
-                    render_saved_details(record.get("input_data", {}))
+                    st.markdown(f"**Result:** {result}")
 
-        except Exception as error:
-            st.error("Could not load cloud history.")
-            st.caption(str(error))
+                    confidence = record.get("confidence")
+                    if confidence is not None:
+                        st.markdown(
+                            f"**Confidence:** {confidence}"
+                        )
 
+                    st.divider()
+
+                    details = record.get("input_data", {})
+
+                    if isinstance(details, dict):
+                        if details:
+                            render_saved_details(details)
+                        else:
+                            st.caption(
+                                "No additional details were saved "
+                                "for this record."
+                            )
+                    elif details:
+                        st.write(details)
+                    else:
+                        st.caption("No input details available.")
+
+            st.caption(
+                f"Showing {len(history)} saved record(s)."
+            )
+
+        else:
+            st.info(
+                "No saved records yet. Your placement predictions "
+                "and analyses will appear here when saved successfully."
+            )
 
 # ============================================================
 # FOOTER
