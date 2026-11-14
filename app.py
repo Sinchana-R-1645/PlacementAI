@@ -639,6 +639,7 @@ elif page == "👤 Student Profile":
                 st.caption(str(error))
 
 
+
 # ============================================================
 # PLACEMENT PREDICTION
 # ============================================================
@@ -681,15 +682,24 @@ elif page == "📊 Placement Prediction":
     except Exception:
         pass
 
+    # --------------------------------------------------------
+    # INPUT FORM
+    # --------------------------------------------------------
+
     with st.form("placement_prediction_form"):
+
         input_data = {}
 
         columns = st.columns(2)
 
         for index, column in enumerate(feature_columns):
+
             series = placement_df[column]
+
             with columns[index % 2]:
+
                 if pd.api.types.is_numeric_dtype(series):
+
                     median_value = pd.to_numeric(
                         series,
                         errors="coerce",
@@ -698,11 +708,26 @@ elif page == "📊 Placement Prediction":
                     if pd.isna(median_value):
                         median_value = 0.0
 
-                    input_data[column] = st.number_input(
-                        column.replace("_", " ").title(),
-                        value=float(median_value),
-                    )
+                    # Keep CGPA's existing decimal increment
+                    if "cgpa" in column.casefold():
+
+                        input_data[column] = st.number_input(
+                            column.replace("_", " ").title(),
+                            value=float(median_value),
+                        )
+
+                    # Other numeric fields increase by 1
+                    else:
+
+                        input_data[column] = st.number_input(
+                            column.replace("_", " ").title(),
+                            value=float(median_value),
+                            step=1.0,
+                            format="%.0f",
+                        )
+
                 else:
+
                     choices = [
                         str(value)
                         for value in series.dropna().unique().tolist()
@@ -721,8 +746,14 @@ elif page == "📊 Placement Prediction":
             use_container_width=True,
         )
 
+    # --------------------------------------------------------
+    # GENERATE PREDICTION
+    # --------------------------------------------------------
+
     if predict_clicked:
+
         try:
+
             prediction_frame = pd.DataFrame(
                 [input_data],
                 columns=feature_columns,
@@ -731,33 +762,105 @@ elif page == "📊 Placement Prediction":
             prediction = model.predict(prediction_frame)[0]
 
             confidence = None
+
             if hasattr(model, "predict_proba"):
-                probabilities = model.predict_proba(prediction_frame)[0]
-                confidence = round(float(max(probabilities)) * 100, 2)
 
-            st.markdown("### Prediction Result")
-            st.success(f"Predicted result: **{prediction}**")
+                probabilities = model.predict_proba(
+                    prediction_frame
+                )[0]
 
-            if confidence is not None:
-                st.metric("Model confidence", f"{confidence:.1f}%")
-
-            try:
-                save_history(
-                    "placement_prediction",
-                    prediction,
-                    {
-                        "input_data": input_data,
-                        "confidence": confidence,
-                    },
+                confidence = round(
+                    float(max(probabilities)) * 100,
+                    2,
                 )
-                st.caption("Prediction saved to your cloud history.")
-            except Exception as error:
-                st.warning("Prediction was made but could not be saved.")
-                st.caption(str(error))
+
+            # Store the latest prediction in session state.
+            # This keeps it available when Streamlit reruns.
+            st.session_state["latest_placement_prediction"] = {
+                "prediction": str(prediction),
+                "confidence": confidence,
+                "input_data": input_data.copy(),
+            }
+
+            # Reset save status for the new prediction
+            st.session_state["placement_prediction_saved"] = False
 
         except Exception as error:
+
             st.error("Could not generate a placement prediction.")
             st.caption(str(error))
+
+            st.session_state.pop(
+                "latest_placement_prediction",
+                None,
+            )
+
+            st.session_state.pop(
+                "placement_prediction_saved",
+                None,
+            )
+
+    # --------------------------------------------------------
+    # DISPLAY RESULT AND SAVE BUTTON
+    # Keep this section OUTSIDE if predict_clicked
+    # --------------------------------------------------------
+
+    latest = st.session_state.get(
+        "latest_placement_prediction"
+    )
+
+    if latest:
+
+        st.markdown("### Prediction Result")
+
+        st.success(
+            f"Predicted result: **{latest['prediction']}**"
+        )
+
+        if latest["confidence"] is not None:
+
+            st.metric(
+                "Model confidence",
+                f"{latest['confidence']:.1f}%",
+            )
+
+        # Save only when the user clicks the button
+        if st.session_state.get("placement_prediction_saved", False):
+
+            st.success("Prediction saved to your cloud history.")
+
+        else:
+
+            if st.button(
+                "☁️ Save Prediction to Cloud",
+                key="save_placement_prediction",
+                use_container_width=True,
+            ):
+
+                try:
+
+                    save_history(
+                        "placement_prediction",
+                        latest["prediction"],
+                        {
+                            "input_data": latest["input_data"],
+                            "confidence": latest["confidence"],
+                        },
+                    )
+
+                    st.session_state["placement_prediction_saved"] = True
+
+                    st.success(
+                        "Prediction saved to your cloud history!"
+                    )
+
+                except Exception as error:
+
+                    st.error(
+                        "Prediction was made, but could not be saved to cloud."
+                    )
+
+                    st.caption(str(error))
 
 
 # ============================================================
@@ -1413,247 +1516,55 @@ elif page == "🧩 Skill Gap Analysis":
 # CLOUD STORAGE
 # ============================================================
 
-
 elif page == "☁️ Cloud Storage":
 
-    # ---------- PAGE DESIGN ----------
-    st.markdown("""
-    <style>
-    .storage-hero {
-        padding: 28px;
-        border-radius: 18px;
-        background: linear-gradient(120deg, #172554, #4338ca, #6366f1);
-        color: white;
-        margin-bottom: 24px;
-    }
-    .storage-hero h1 {
-        color: white;
-        margin-bottom: 8px;
-        font-size: 30px;
-    }
-    .storage-hero p {
-        color: #e0e7ff;
-        margin-bottom: 0;
-        font-size: 16px;
-    }
-    .storage-card {
-        background: var(--secondary-background-color);
-        padding: 20px;
-        border: 1px solid rgba(128,128,128,0.25);
-        border-radius: 16px;
-        min-height: 125px;
-        margin-bottom: 12px;
-    }
-    .storage-card-title {
-        font-size: 14px;
-        opacity: 0.8;
-        margin-bottom: 8px;
-    }
-    .storage-card-value {
-        font-size: 25px;
-        font-weight: 700;
-        overflow-wrap: anywhere;
-    }
-    .storage-section {
-        padding: 18px;
-        border: 1px solid rgba(128,128,128,0.25);
-        border-radius: 16px;
-        margin-top: 10px;
-        margin-bottom: 16px;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+    st.header("☁️ Cloud Storage")
+    st.write("View your saved profile and prediction/analysis history.")
 
-    st.markdown("""
-    <div class="storage-hero">
-        <h1>☁️ My Cloud Storage</h1>
-        <p>Your personal PlacementAI workspace — access your saved
-        profile and revisit your placement predictions and analyses.</p>
-    </div>
-    """, unsafe_allow_html=True)
+    tab_profile, tab_history = st.tabs(
+        ["👤 Saved Profile", "📚 Prediction & Analysis History"]
+    )
 
-    # ---------- LOAD CLOUD DATA ----------
-    profile = {}
-    history = []
-    profile_error = None
-    history_error = None
-
-    try:
-        profile = get_student_profile()
-    except Exception as error:
-        profile_error = str(error)
-
-    try:
-        response = cloud_select("placementai_prediction_history")
-        history = response.data or []
-    except Exception as error:
-        history_error = str(error)
-
-    # ---------- SUMMARY CARDS ----------
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        st.markdown("""
-        <div class="storage-card">
-            <div class="storage-card-title">👤 Student Profile</div>
-            <div class="storage-card-value">""" +
-            ("Saved ✓" if profile else "Not saved") + """</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with col2:
-        st.markdown("""
-        <div class="storage-card">
-            <div class="storage-card-title">📚 Saved Records</div>
-            <div class="storage-card-value">""" +
-            str(len(history)) + """</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with col3:
-        st.markdown("""
-        <div class="storage-card">
-            <div class="storage-card-title">☁️ Storage Status</div>
-            <div class="storage-card-value">""" +
-            ("Connected" if not profile_error and not history_error
-             else "Check connection") + """</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    st.write("")
-
-    # ---------- TABS ----------
-    tab_profile, tab_history = st.tabs([
-        "👤  My Profile",
-        "📚  Prediction History"
-    ])
-
-    # ---------- PROFILE TAB ----------
     with tab_profile:
-        st.subheader("Your Student Profile")
-        st.caption("Your saved academic and skill information.")
+        try:
+            profile = get_student_profile()
 
-        if profile_error:
-            st.error("Unable to load your profile from cloud storage.")
-            st.caption(profile_error)
+            if profile:
+                st.write("**Full name:**", profile.get("full_name", ""))
+                st.write("**Course:**", profile.get("course", ""))
+                st.write("**Graduation year:**", profile.get("graduation_year", ""))
+                st.write("**Skills:**", profile.get("skills", ""))
+            else:
+                st.info("No profile saved yet.")
+        except Exception as error:
+            st.error("Could not load your saved profile.")
+            st.caption(str(error))
 
-        elif profile:
-            name = profile.get("full_name") or "Not provided"
-            course = profile.get("course") or "Not provided"
-            year = profile.get("graduation_year") or "Not provided"
-            skills = profile.get("skills") or "No skills added yet"
-
-            st.markdown('<div class="storage-section">',
-                        unsafe_allow_html=True)
-
-            st.markdown(f"### 🎓 {name}")
-            st.divider()
-
-            left, right = st.columns(2)
-
-            with left:
-                st.markdown("**📖 Course**")
-                st.write(course)
-
-                st.markdown("**📅 Graduation Year**")
-                st.write(str(year))
-
-            with right:
-                st.markdown("**🛠️ Skills**")
-                st.write(skills)
-
-            updated_at = profile.get("updated_at")
-            if updated_at:
-                st.caption(f"Last updated: {updated_at}")
-
-            st.markdown('</div>', unsafe_allow_html=True)
-
-            st.success("Your profile is available in cloud storage.")
-
-        else:
-            st.info(
-                "Your profile has not been saved yet. "
-                "Complete your profile in PlacementAI to see it here."
-            )
-
-    # ---------- HISTORY TAB ----------
     with tab_history:
-        left, right = st.columns([3, 1])
+        if st.button("🔄 Refresh Cloud History"):
+            st.rerun()
 
-        with left:
-            st.subheader("Your Saved Records")
-            st.caption(
-                "Review your previous placement predictions "
-                "and skill-gap analyses."
-            )
+        try:
+            response = cloud_select("placementai_prediction_history")
+            history = response.data or []
 
-        with right:
-            if st.button("🔄 Refresh", use_container_width=True):
-                st.rerun()
+            if not history:
+                st.info("No saved predictions or analyses yet.")
 
-        if history_error:
-            st.error("Unable to load your cloud history.")
-            st.caption(history_error)
-
-        elif history:
-            # Show latest records first when timestamps are available.
-            history = sorted(
-                history,
-                key=lambda item: str(item.get("created_at") or ""),
-                reverse=True
-            )
-
-            for index, record in enumerate(history, start=1):
-                action = str(
-                    record.get("action") or "Saved Record"
-                ).replace("_", " ").title()
-
-                result = str(
-                    record.get("prediction") or "No result available"
-                )
-
-                created_at = str(
-                    record.get("created_at") or "Date not available"
-                )
+            for index, record in enumerate(history):
+                action = str(record.get("action", "Saved record"))
+                result = str(record.get("prediction", ""))
+                created_at = str(record.get("created_at", ""))
 
                 with st.expander(
-                    f"📄 {action}  |  {created_at}",
-                    expanded=(index == 1)
+                    f"{action.replace('_', ' ').title()} — {result} — {created_at}"
                 ):
-                    st.markdown(f"**Result:** {result}")
+                    render_saved_details(record.get("input_data", {}))
 
-                    confidence = record.get("confidence")
-                    if confidence is not None:
-                        st.markdown(
-                            f"**Confidence:** {confidence}"
-                        )
+        except Exception as error:
+            st.error("Could not load cloud history.")
+            st.caption(str(error))
 
-                    st.divider()
-
-                    details = record.get("input_data", {})
-
-                    if isinstance(details, dict):
-                        if details:
-                            render_saved_details(details)
-                        else:
-                            st.caption(
-                                "No additional details were saved "
-                                "for this record."
-                            )
-                    elif details:
-                        st.write(details)
-                    else:
-                        st.caption("No input details available.")
-
-            st.caption(
-                f"Showing {len(history)} saved record(s)."
-            )
-
-        else:
-            st.info(
-                "No saved records yet. Your placement predictions "
-                "and analyses will appear here when saved successfully."
-            )
 
 # ============================================================
 # FOOTER
