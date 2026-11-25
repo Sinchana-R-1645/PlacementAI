@@ -562,6 +562,7 @@ with st.sidebar:
         st.rerun()
 
 
+
 # ============================================================
 # DASHBOARD
 # ============================================================
@@ -582,50 +583,70 @@ if page == "🏠 Dashboard":
         unsafe_allow_html=True,
     )
 
-    col1, col2, col3 = st.columns(3)
+    # All 7 workspace sections
+    dashboard_cards = [
+        (
+            "👤",
+            "Student Profile",
+            "Manage your academic details, skills, and experience.",
+        ),
+        (
+            "📊",
+            "Placement Prediction",
+            "Estimate placement readiness from your profile.",
+        ),
+        (
+            "💼",
+            "Job Role Recommendations",
+            "Explore suitable job roles, required skills, and certifications.",
+        ),
+        (
+            "🧩",
+            "Skill Gap Analysis",
+            "Identify missing skills and follow your learning roadmap.",
+        ),
+        (
+            "🌐",
+            "Live Job Vacancies",
+            "Explore job listings and compare them with your skills.",
+        ),
+        (
+            "☁️",
+            "Cloud Storage",
+            "Access your saved student information and history.",
+        ),
+        (
+            "📈",
+            "Career Overview",
+            "Review your placement readiness and career progress.",
+        ),
+    ]
 
-    with col1:
-        st.markdown(
-            """
-            <div class="feature-card">
-                <div class="feature-icon">📊</div>
-                <div class="feature-title">Placement Prediction</div>
-                <div class="feature-description">
-                    Estimate placement readiness from your profile.
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+    # Display 3 cards per row
+    for start in range(0, len(dashboard_cards), 3):
+        card_columns = st.columns(3)
 
-    with col2:
-        st.markdown(
-            """
-            <div class="feature-card">
-                <div class="feature-icon">💼</div>
-                <div class="feature-title">Career Recommendations</div>
-                <div class="feature-description">
-                    Explore job roles, required skills, and certifications.
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        for column, card in zip(
+            card_columns,
+            dashboard_cards[start:start + 3],
+        ):
+            icon, title, description = card
 
-    with col3:
-        st.markdown(
-            """
-            <div class="feature-card">
-                <div class="feature-icon">🧩</div>
-                <div class="feature-title">Skill Gap Roadmap</div>
-                <div class="feature-description">
-                    Discover missing skills and follow a guided study plan.
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+            with column:
+                st.markdown(
+                    f"""
+                    <div class="feature-card">
+                        <div class="feature-icon">{icon}</div>
+                        <div class="feature-title">{title}</div>
+                        <div class="feature-description">
+                            {description}
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
 
+    # Student profile overview
     try:
         profile = get_student_profile()
 
@@ -633,14 +654,17 @@ if page == "🏠 Dashboard":
 
         if profile:
             col1, col2, col3 = st.columns(3)
+
             col1.metric(
                 "Course",
                 profile.get("course") or "Not specified",
             )
+
             col2.metric(
                 "Graduation year",
                 profile.get("graduation_year") or "Not specified",
             )
+
             col3.metric(
                 "Skills listed",
                 len(normalize_skills(profile.get("skills", ""))),
@@ -653,6 +677,7 @@ if page == "🏠 Dashboard":
     except Exception as error:
         st.warning("Could not load your profile.")
         st.caption(str(error))
+
 
 
 # ============================================================
@@ -2564,126 +2589,167 @@ elif page == "🌐 Live Job Vacancies":
                 "suggests they may not suit entry-level applicants."
             )
 
+        
         # --------------------------------------------------------
         # 8. JOB CARD DISPLAY
         # --------------------------------------------------------
 
-        def display_job(job):
-            st.markdown("---")
-            st.subheader(job["title"])
+        st.subheader("Available Job Listings")
 
-            st.write("**Company:**", job["company"])
-            st.write("**Location:**", job["location"])
-            st.write("**Source:**", job["source"])
-            st.write("**Posted:**", job["date_label"])
-            st.write(
-                "**Experience classification:**",
-                job["experience_category"]
-            )
-            st.write("**Experience requirement:**", job["experience_requirement"])
-            st.write(
-                "**Estimated skill overlap:**",
-                f"{job['skill_overlap']}%"
+        if not displayed_jobs:
+            st.info(
+                "No job listings are available with the current filters. "
+                "Try disabling fresher prioritization, including older "
+                "listings, or searching for another job title or location."
             )
 
+        else:
             st.write(
-                "**Your matching skills:**",
-                ", ".join(job["matching_skills"])
-                if job["matching_skills"]
-                else "No direct keyword match found"
+                f"Displaying **{len(displayed_jobs)}** eligible job listing(s)."
             )
 
-            if job["missing_skills"]:
-                st.write(
-                    "**Saved skills not detected in this listing:**",
-                    ", ".join(job["missing_skills"])
+            for index, job in enumerate(displayed_jobs, start=1):
+
+                title = (
+                    clean_text(job.get("title", ""))
+                    or "Job title not provided"
                 )
 
-            if job["technologies"]:
-                st.write(
-                    "**Technologies detected in the listing:**",
-                    ", ".join(job["technologies"])
+                company_value = job.get("company", "")
+                if isinstance(company_value, dict):
+                    company_value = (
+                        company_value.get("display_name")
+                        or company_value.get("name")
+                        or ""
+                    )
+
+                company = (
+                    clean_text(company_value)
+                    or "Company not specified"
                 )
 
-            if job.get("description"):
-                with st.expander("View job description"):
-                    st.write(job["description"])
+                location_value = job.get("location", "")
+                if isinstance(location_value, dict):
+                    location_value = (
+                        location_value.get("display_name")
+                        or location_value.get("name")
+                        or ""
+                    )
 
-            if job.get("url"):
-                st.markdown(f"[View original vacancy]({job['url']})")
-            else:
-                st.caption("Original vacancy URL was not provided by the API.")
-
-        st.subheader(f"Recent Listings ({len(eligible_recent)})")
-        if eligible_recent:
-            for job in eligible_recent:
-                display_job(job)
-        else:
-            st.info("No eligible recent listings were found.")
-
-        st.subheader(f"Undated Listings ({len(eligible_undated)})")
-        if eligible_undated:
-            st.caption(
-                "These listings do not have a verifiable posting date. "
-                "They are not automatically treated as recent."
-            )
-            for job in eligible_undated:
-                display_job(job)
-        else:
-            st.info("No eligible listings with an unverified posting date were found.")
-
-        if include_old:
-            st.subheader(f"Older Listings — over 90 days ({len(eligible_old)})")
-            if eligible_old:
-                for job in eligible_old:
-                    display_job(job)
-            else:
-                st.info("No eligible listings older than 90 days were found.")
-        else:
-            st.caption(
-                f"{len(eligible_old)} eligible listing(s) older than 90 days "
-                "are hidden. Enable the checkbox above and search again to "
-                "show them in a separate section."
-            )
-
-        if fresher_priority:
-            st.subheader(
-                f"Experience-filtered Listings ({len(experience_filtered)})"
-            )
-            if experience_filtered:
-                st.caption(
-                    "These are excluded from the main results because the "
-                    "role appears to require more experience or may be senior-level."
+                location = (
+                    clean_text(location_value)
+                    or "Location not specified"
                 )
-                with st.expander("View experience-filtered listings"):
-                    for job in experience_filtered:
-                        st.markdown(f"**{job['title']}**")
-                        st.write("Company:", job["company"])
-                        st.write("Location:", job["location"])
-                        st.write("Posted:", job["date_label"])
+
+                description = clean_text(
+                    job.get("description", "")
+                )
+
+                job_url = (
+                    job.get("url")
+                    or job.get("redirect_url")
+                    or job.get("link")
+                    or job.get("job_url")
+                    or ""
+                )
+
+                source = (
+                    clean_text(job.get("source", ""))
+                    or "Job provider not specified"
+                )
+
+                date_label = (
+                    job.get("date_label")
+                    or "Date not verified"
+                )
+
+                experience_category = (
+                    job.get("experience_category")
+                    or "Not classified"
+                )
+
+                experience_requirement = (
+                    job.get("experience_requirement")
+                    or "Check the original job listing"
+                )
+
+                matching_skills = job.get("matching_skills", [])
+                missing_skills = job.get("missing_skills", [])
+                technologies = job.get("technologies", [])
+                skill_overlap = job.get("skill_overlap", 0)
+
+                with st.container(border=True):
+
+                    st.markdown(f"### {index}. {title}")
+
+                    st.write(f"**Company:** {company}")
+                    st.write(f"**Location:** {location}")
+
+                    col1, col2, col3 = st.columns(3)
+
+                    col1.metric(
+                        "Skill overlap",
+                        f"{skill_overlap}%"
+                    )
+
+                    col2.metric(
+                        "Experience category",
+                        experience_category
+                    )
+
+                    col3.metric(
+                        "Posting date",
+                        date_label
+                    )
+
+                    st.write(
+                        f"**Experience requirement:** "
+                        f"{experience_requirement}"
+                    )
+
+                    if matching_skills:
                         st.write(
-                            "Experience:",
-                            job["experience_requirement"]
+                            "**Matching skills:** "
+                            + ", ".join(map(str, matching_skills))
                         )
-                        if job.get("url"):
-                            st.markdown(
-                                f"[View original vacancy]({job['url']})"
-                            )
-                        st.markdown("---")
+                    else:
+                        st.write(
+                            "**Matching skills:** No matches identified"
+                        )
 
-        st.caption(
-            "Provider totals are reported counts, not the number of listings "
-            "retrieved. Duplicate removal uses normalized URLs or title, "
-            "company, and location. Skill scores are keyword-overlap estimates, "
-            "not selection probabilities. Undated listings are kept separate "
-            "from recent listings. Verify experience, posting dates, and "
-            "availability on the original vacancy page."
-        )
+                    if missing_skills:
+                        st.write(
+                            "**Skills to strengthen:** "
+                            + ", ".join(map(str, missing_skills))
+                        )
 
-    st.markdown("---")
-    st.caption(
-        "PlacementAI · Student Placement & Career Support Platform"
-    )
+                    if technologies:
+                        st.write(
+                            "**Technologies mentioned:** "
+                            + ", ".join(map(str, technologies))
+                        )
+
+                    if description:
+                        with st.expander("View job description"):
+                            st.write(description)
+
+                    st.caption(
+                        f"Source: {source} | "
+                        f"Listing date: {date_label}"
+                    )
+
+                    if job_url:
+                        st.link_button(
+                            "View Original Job / Apply",
+                            str(job_url),
+                            use_container_width=True
+                        )
+                    else:
+                        st.caption(
+                            "An application link was not provided by "
+                            "the job provider."
+                        )
+
 
 # ============================================================
 # CLOUD STORAGE
