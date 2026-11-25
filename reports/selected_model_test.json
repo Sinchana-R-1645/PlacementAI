@@ -1,0 +1,9 @@
+{
+    "selected_model": "Logistic Regression",
+    "test_records": 1445,
+    "accuracy_percent": 79.31,
+    "balanced_accuracy_percent": 79.29,
+    "precision_placed_percent": 73.51,
+    "recall_placed_percent": 79.21,
+    "f1_placed_percent": 76.25
+}
