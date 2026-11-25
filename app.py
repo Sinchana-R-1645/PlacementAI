@@ -1122,6 +1122,7 @@ elif page == "📊 Placement Prediction":
             "score is not a guarantee of actual placement."
         )
 
+
 # ============================================================
 # JOB ROLE RECOMMENDATIONS
 # ============================================================
@@ -1135,75 +1136,367 @@ elif page == "💼 Job Role Recommendations":
         "and suggested certifications."
     )
 
-    if not job_titles:
-        st.warning("No job roles are available in job_roles.csv.")
+    # --------------------------------------------------------
+    # SKILL NORMALIZATION
+    # --------------------------------------------------------
+    def normalize_recommendation_skill(skill):
+        """Normalize common alternative names for the same skill."""
+
+        skill = str(skill).strip().casefold()
+        skill = re.sub(r"\s+", " ", skill)
+
+        skill_aliases = {
+            "gcp": "google cloud",
+            "google cloud platform": "google cloud",
+            "amazon web services": "aws",
+            "amazon aws": "aws",
+            "js": "javascript",
+            "structured query language": "sql",
+            "k8s": "kubernetes",
+            "ci cd": "ci/cd",
+            "ci-cd": "ci/cd",
+            "machine-learning": "machine learning",
+            "deep-learning": "deep learning",
+        }
+
+        return skill_aliases.get(skill, skill)
+
+    # --------------------------------------------------------
+    # AUTOMATIC JOB ROLE RANKING
+    # --------------------------------------------------------
+    try:
+        student_profile = get_student_profile() or {}
+    except Exception:
+        student_profile = {}
+
+    saved_skills_text = (
+        student_profile.get("skills", "")
+        if isinstance(student_profile, dict)
+        else ""
+    )
+
+    student_skills = [
+        skill.strip()
+        for skill in re.split(r"[,;\n]", str(saved_skills_text))
+        if skill.strip()
+    ]
+
+    if student_skills:
+
+        student_skill_set = {
+            normalize_recommendation_skill(skill)
+            for skill in student_skills
+            if normalize_recommendation_skill(skill)
+        }
+
+        ranked_roles = []
+
+        for _, role in jobs_df.iterrows():
+
+            title = str(role.get("Job Title", "")).strip()
+
+            if not title:
+                continue
+
+            raw_skills = role.get("Skills", "")
+
+            if pd.isna(raw_skills):
+                required = []
+            else:
+                required = [
+                    skill.strip()
+                    for skill in str(raw_skills).split(",")
+                    if skill.strip()
+                ]
+
+            if not required:
+                continue
+
+            # Normalize required skills consistently.
+            normalized_required = {
+                normalize_recommendation_skill(skill)
+                for skill in required
+                if normalize_recommendation_skill(skill)
+            }
+
+            if not normalized_required:
+                continue
+
+            # Keep original skill names for display.
+            matched_skills = [
+                skill for skill in required
+                if normalize_recommendation_skill(skill)
+                in student_skill_set
+            ]
+
+            missing_skills = [
+                skill for skill in required
+                if normalize_recommendation_skill(skill)
+                not in student_skill_set
+            ]
+
+            matched_normalized = (
+                normalized_required & student_skill_set
+            )
+
+            match_percentage = (
+                100 * len(matched_normalized)
+                / len(normalized_required)
+            )
+
+            ranked_roles.append({
+                "title": title,
+                "matched": matched_skills,
+                "missing": missing_skills,
+                "percentage": match_percentage,
+                "matched_count": len(matched_normalized),
+                "skill_set": normalized_required,
+            })
+
+        # Rank by skill coverage, matched skill count, then title.
+        ranked_roles.sort(
+            key=lambda role: (
+                role["percentage"],
+                role["matched_count"],
+                role["title"].casefold(),
+            ),
+            reverse=True,
+        )
+
+        # ----------------------------------------------------
+        # REMOVE IDENTICAL AND NEAR-DUPLICATE SKILL SETS
+        # ----------------------------------------------------
+        filtered_roles = []
+        similarity_threshold = 0.80
+
+        for role in ranked_roles:
+
+            current_skills = role["skill_set"]
+            is_similar = False
+
+            for selected_role in filtered_roles:
+
+                selected_skills = selected_role["skill_set"]
+                union_skills = current_skills | selected_skills
+
+                if not union_skills:
+                    continue
+
+                # Jaccard similarity between required skill sets.
+                similarity = (
+                    len(current_skills & selected_skills)
+                    / len(union_skills)
+                )
+
+                if similarity >= similarity_threshold:
+                    is_similar = True
+                    break
+
+            # Keep the higher-ranked role when two roles
+            # have identical or highly similar skill sets.
+            if not is_similar:
+                filtered_roles.append(role)
+
+        ranked_roles = filtered_roles
+
+        # ----------------------------------------------------
+        # DISPLAY TOP FIVE RECOMMENDATIONS
+        # ----------------------------------------------------
+        st.markdown("### Recommended roles for your skills")
+
+        st.caption(
+            "Recommendations are ranked by overlap with the skills "
+            "listed in your Student Profile. Similar roles may be "
+            "filtered to reduce duplication. A high match is not a "
+            "guarantee of job eligibility or placement."
+        )
+
+        if ranked_roles:
+
+            for index, role in enumerate(
+                ranked_roles[:5], start=1
+            ):
+
+                st.markdown(
+                    f"**{index}. {role['title']}**"
+                )
+
+                st.progress(
+                    int(round(role["percentage"]))
+                )
+
+                st.write(
+                    f"Skill overlap: {role['percentage']:.1f}%"
+                )
+
+                st.write(
+                    "Matching skills: "
+                    + (
+                        ", ".join(role["matched"])
+                        if role["matched"]
+                        else "None"
+                    )
+                )
+
+                st.write(
+                    "Skills to learn: "
+                    + (
+                        ", ".join(role["missing"][:5])
+                        if role["missing"]
+                        else "None listed"
+                    )
+                )
+
+                st.divider()
+
+        else:
+            st.info(
+                "No job roles with listed skills could be ranked."
+            )
 
     else:
+        st.info(
+            "Add your skills in Student Profile to receive "
+            "personalized job role recommendations."
+        )
+
+    # --------------------------------------------------------
+    # EXISTING MANUAL ROLE SELECTION
+    # --------------------------------------------------------
+    if not job_titles:
+
+        st.warning(
+            "No job roles are available in job_roles.csv."
+        )
+
+    else:
+
         selected_job = st.selectbox(
             "Choose a job role",
             job_titles,
             key="recommendation_job",
         )
 
-        job = jobs_df[
-            jobs_df["Job Title"] == selected_job
-        ].iloc[0]
-
-        st.markdown(f"### {selected_job}")
-
-        description = str(job["Job Description"]).strip()
-        st.write(description or "No description is available.")
-
-        required_skills = [
-            item.strip()
-            for item in str(job["Skills"]).split(",")
-            if item.strip()
+        selected_rows = jobs_df[
+            jobs_df["Job Title"].astype(str) == selected_job
         ]
 
-        certifications = [
-            item.strip()
-            for item in str(job["Certifications"]).split(",")
-            if item.strip()
-        ]
+        if selected_rows.empty:
 
-        left, right = st.columns(2)
+            st.warning(
+                "The selected job role could not be found."
+            )
 
-        with left:
-            st.markdown("#### Required skills")
-            if required_skills:
-                for skill in required_skills:
-                    st.write(f"• {skill}")
-            else:
-                st.info("No skills listed for this role.")
+        else:
 
-        with right:
-            st.markdown("#### Suggested certifications")
-            if certifications:
-                for certification in certifications:
-                    st.write(f"• {certification}")
-            else:
-                st.info("No certifications listed.")
+            job = selected_rows.iloc[0]
 
-        if st.button(
-            "☁️ Save Job Role to Cloud History",
-            key="save_job_role",
-            use_container_width=True,
-        ):
-            try:
-                save_history(
-                    "job_recommendation",
-                    selected_job,
-                    {
-                        "job_title": selected_job,
-                        "skills": required_skills,
-                        "certifications": certifications,
-                    },
-                )
-                st.success("Job recommendation saved.")
-            except Exception as error:
-                st.error("Could not save this recommendation.")
-                st.caption(str(error))
- # ============================================================
+            st.markdown(f"### {selected_job}")
+
+            # Safely handle missing descriptions.
+            description_value = job.get(
+                "Job Description", ""
+            )
+
+            description = (
+                ""
+                if pd.isna(description_value)
+                else str(description_value).strip()
+            )
+
+            st.write(
+                description
+                if description
+                else "No description is available."
+            )
+
+            # Safely handle missing skills.
+            skills_value = job.get("Skills", "")
+
+            required_skills = (
+                []
+                if pd.isna(skills_value)
+                else [
+                    item.strip()
+                    for item in str(skills_value).split(",")
+                    if item.strip()
+                ]
+            )
+
+            # Safely handle missing certifications.
+            certifications_value = job.get(
+                "Certifications", ""
+            )
+
+            certifications = (
+                []
+                if pd.isna(certifications_value)
+                else [
+                    item.strip()
+                    for item in str(certifications_value).split(",")
+                    if item.strip()
+                ]
+            )
+
+            left, right = st.columns(2)
+
+            with left:
+
+                st.markdown("#### Required skills")
+
+                if required_skills:
+                    for skill in required_skills:
+                        st.write(f"• {skill}")
+                else:
+                    st.info(
+                        "No skills listed for this role."
+                    )
+
+            with right:
+
+                st.markdown("#### Suggested certifications")
+
+                if certifications:
+                    for certification in certifications:
+                        st.write(f"• {certification}")
+                else:
+                    st.info(
+                        "No certifications listed."
+                    )
+
+            # ------------------------------------------------
+            # SAVE JOB ROLE TO CLOUD HISTORY
+            # ------------------------------------------------
+            if st.button(
+                "☁️ Save Job Role to Cloud History",
+                key="save_job_role",
+                use_container_width=True,
+            ):
+
+                try:
+                    save_history(
+                        "job_recommendation",
+                        selected_job,
+                        {
+                            "job_title": selected_job,
+                            "skills": required_skills,
+                            "certifications": certifications,
+                        },
+                    )
+
+                    st.success(
+                        "Job recommendation saved."
+                    )
+
+                except Exception as error:
+
+                    st.error(
+                        "Could not save this recommendation."
+                    )
+
+                    st.caption(str(error))
+
+
 # SKILL GAP ANALYSIS + GUIDED LEARNING ROADMAP
 # ============================================================
 
@@ -1713,7 +2006,7 @@ elif page == "🧩 Skill Gap Analysis":
                                 for step_index, step in enumerate(project_steps, 1):
                                     st.write(f"{step_index}. {step}")
 
-                               
+
                                 st.markdown("### Save lesson progress")
 
                                 status_options = [
@@ -2589,7 +2882,7 @@ elif page == "🌐 Live Job Vacancies":
                 "suggests they may not suit entry-level applicants."
             )
 
-        
+
         # --------------------------------------------------------
         # 8. JOB CARD DISPLAY
         # --------------------------------------------------------
