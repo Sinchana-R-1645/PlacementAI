@@ -7,7 +7,7 @@ import pandas as pd
 import re
 import requests
 import streamlit as st
-
+from jooble_api import search_jooble
 from auth import get_supabase_client, show_auth_page
 
 
@@ -345,6 +345,7 @@ def get_student_profile():
 
 
 
+
 def save_student_profile(
     full_name,
     course,
@@ -355,7 +356,9 @@ def save_student_profile(
     internship_experience_months=0,
     project_experience="",
 ):
-    supabase = get_supabase_client()
+    # IMPORTANT:
+    # Reuse the globally authenticated Supabase client.
+    # Do not create a new client inside this function.
 
     payload = {
         "user_id": student_id,
@@ -372,6 +375,7 @@ def save_student_profile(
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
 
+    # Check whether this student's profile already exists.
     existing_profile = (
         supabase.table("placementai_student_profiles")
         .select("user_id")
@@ -381,14 +385,22 @@ def save_student_profile(
     )
 
     if existing_profile.data:
-        supabase.table("placementai_student_profiles").update(
-            payload
-        ).eq("user_id", student_id).execute()
+        # Update the existing profile.
+        response = (
+            supabase.table("placementai_student_profiles")
+            .update(payload)
+            .eq("user_id", student_id)
+            .execute()
+        )
     else:
-        supabase.table("placementai_student_profiles").insert(
-            payload
-        ).execute()
+        # Insert a new profile.
+        response = (
+            supabase.table("placementai_student_profiles")
+            .insert(payload)
+            .execute()
+        )
 
+    return response
 
 
 def save_history(action, result, details):
@@ -1599,1227 +1611,939 @@ elif page == "🧩 Skill Gap Analysis":
 
 
 
+
+
+
 # ============================================================
 # LIVE JOB VACANCIES
-# Adzuna API + Skill Matching + Skill Gaps
-# + Related Technologies + Experience Analysis
-# + Fresher / Entry-Level Filter
+# Adzuna + Jooble
+# Fixes:
+# 1. Accurate old-listing hidden counts
+# 2. Separate undated listings
+# 3. Consistent date and experience categories
 # ============================================================
+
 
 elif page == "🌐 Live Job Vacancies":
 
+    import re
+    import requests
+    import streamlit as st
+    from datetime import datetime, timezone, timedelta
+    from urllib.parse import urlparse
+    from difflib import SequenceMatcher
+
+    from jooble_api import search_jooble
+
     st.header("🌐 Live Job Vacancies")
-
     st.write(
-        "Search live Adzuna listings, compare student skills, "
-        "identify related technologies to explore, and estimate "
-        "experience compatibility."
+        "Search job listings from Adzuna and Jooble, compare them with "
+        "your saved skills, and review experience requirements."
+    )
+    st.caption(
+        "Skill matching and experience classifications are estimates. "
+        "Always verify the requirements on the original vacancy page."
     )
 
-    st.info(
-        "Skill matching and experience comparisons are estimates. "
-        "They do not guarantee eligibility, interview calls, or selection."
-    )
+    # ------------------------------------------------------------
+    # 1. GENERAL HELPERS
+    # ------------------------------------------------------------
 
-    # --------------------------------------------------------
-    # 1. LOAD STUDENT PROFILE
-    # --------------------------------------------------------
+    def clean_text(value):
+        """Convert text or nested API fields into readable text."""
+        if value is None:
+            return ""
 
-    profile = {}
+        if isinstance(value, dict):
+            for key in (
+                "display_name", "name", "label", "value",
+                "description", "title"
+            ):
+                if value.get(key):
+                    return clean_text(value[key])
+
+            return ""
+
+        if isinstance(value, list):
+            return ", ".join(
+                clean_text(item) for item in value if item is not None
+            )
+
+        return re.sub(r"\s+", " ", str(value)).strip()
+
+    def normalized_text(value):
+        value = clean_text(value).lower()
+        value = value.replace("node.js", "nodejs")
+        value = value.replace("c++", "cplusplus")
+        value = value.replace("c#", "csharp")
+        value = value.replace("&", " and ")
+        return re.sub(r"\s+", " ", value).strip()
+
+    def get_first(data, keys, default=""):
+        if not isinstance(data, dict):
+            return default
+
+        for key in keys:
+            value = data.get(key)
+            if value is not None and value != "":
+                return value
+
+        return default
+
+    def normalize_url(url):
+        url = clean_text(url)
+        if not url:
+            return ""
+
+        if url.startswith("//"):
+            url = "https:" + url
+        elif url.startswith("www."):
+            url = "https://" + url
+        elif url and not url.startswith(("http://", "https://")):
+            return ""
+
+        try:
+            parsed = urlparse(url)
+            if parsed.scheme not in ("http", "https") or not parsed.netloc:
+                return ""
+
+            # Remove tracking query strings and fragments for deduplication.
+            return (
+                parsed.scheme.lower()
+                + "://"
+                + parsed.netloc.lower()
+                + parsed.path.rstrip("/")
+            )
+        except Exception:
+            return ""
+
+    def parse_posted_date(value):
+        """Return a timezone-aware datetime or None."""
+        if value is None or value == "":
+            return None
+
+        if isinstance(value, (int, float)):
+            try:
+                # Handle Unix timestamps in seconds or milliseconds.
+                if value > 10_000_000_000:
+                    value = value / 1000
+                return datetime.fromtimestamp(value, tz=timezone.utc)
+            except (ValueError, OverflowError, OSError):
+                return None
+
+        text_value = clean_text(value)
+        if not text_value:
+            return None
+
+        try:
+            parsed = datetime.fromisoformat(
+                text_value.replace("Z", "+00:00")
+            )
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            return parsed
+        except (ValueError, TypeError):
+            pass
+
+        formats = [
+            "%d %b %Y", "%d %B %Y",
+            "%Y-%m-%d", "%Y/%m/%d",
+            "%d-%m-%Y", "%m/%d/%Y",
+        ]
+
+        for date_format in formats:
+            try:
+                return datetime.strptime(
+                    text_value, date_format
+                ).replace(tzinfo=timezone.utc)
+            except ValueError:
+                continue
+
+        # Relative dates such as "2 days ago".
+        match = re.search(
+            r"(\d+)\s+(minute|hour|day|week|month|year)s?\s+ago",
+            text_value.lower()
+        )
+
+        if match:
+            amount = int(match.group(1))
+            unit = match.group(2)
+            now = datetime.now(timezone.utc)
+
+            if unit == "minute":
+                return now - timedelta(minutes=amount)
+            if unit == "hour":
+                return now - timedelta(hours=amount)
+            if unit == "day":
+                return now - timedelta(days=amount)
+            if unit == "week":
+                return now - timedelta(weeks=amount)
+            if unit == "month":
+                return now - timedelta(days=30 * amount)
+            if unit == "year":
+                return now - timedelta(days=365 * amount)
+
+        if text_value.lower() in ("today", "just now"):
+            return datetime.now(timezone.utc)
+
+        if text_value.lower() == "yesterday":
+            return datetime.now(timezone.utc) - timedelta(days=1)
+
+        return None
+
+    def normalize_adzuna_job(job):
+        """Convert Adzuna nested fields to plain readable strings."""
+        company = clean_text(job.get("company"))
+        location = clean_text(job.get("location"))
+
+        return {
+            "title": clean_text(job.get("title")) or "Untitled vacancy",
+            "company": company or "Company not provided",
+            "location": location or "Location not provided",
+            "description": clean_text(job.get("description")),
+            "url": clean_text(
+                get_first(job, ["redirect_url", "url", "link"])
+            ),
+            "posted": get_first(
+                job, ["created", "posted", "posted_at", "date"]
+            ),
+            "source": "Adzuna",
+            "job_type": clean_text(job.get("contract_type")),
+            "salary_min": job.get("salary_min"),
+            "salary_max": job.get("salary_max"),
+        }
+
+    def normalize_jooble_job(job):
+        """Normalize results from the existing Jooble helper."""
+        return {
+            "title": clean_text(
+                get_first(job, ["title", "position"])
+            ) or "Untitled vacancy",
+            "company": clean_text(
+                get_first(job, ["company", "company_name"])
+            ) or "Company not provided",
+            "location": clean_text(
+                get_first(job, ["location", "city"])
+            ) or "Location not provided",
+            "description": clean_text(
+                get_first(job, ["description", "snippet"])
+            ),
+            "url": clean_text(
+                get_first(job, ["url", "link", "job_url"])
+            ),
+            "posted": get_first(
+                job, ["updated", "updated_at", "date", "posted"]
+            ),
+            "source": "Jooble",
+            "job_type": clean_text(
+                get_first(job, ["type", "job_type"])
+            ),
+            "salary_min": None,
+            "salary_max": None,
+        }
+
+    # ------------------------------------------------------------
+    # 2. SKILL MATCHING
+    # Do not match single-letter "c": it creates false positives.
+    # ------------------------------------------------------------
+
+    SKILL_ALIASES = {
+        "python": [r"\bpython\b"],
+        "java": [r"\bjava\b"],
+        "sql": [r"\bsql\b"],
+        "data structures": [
+            r"\bdata structures\b",
+            r"\bdata structure and algorithms\b",
+            r"\bdsa\b",
+        ],
+        "data analytics": [
+            r"\bdata analytics\b",
+            r"\bdata analysis\b",
+            r"\bdata analyst\b",
+            r"\bdata analytics tools\b",
+        ],
+        "cloud computing": [
+            r"\bcloud computing\b",
+            r"\bcloud services\b",
+            r"\baws\b",
+            r"\bazure\b",
+            r"\bgcp\b",
+            r"\bgoogle cloud\b",
+        ],
+        "machine learning": [
+            r"\bmachine learning\b",
+            r"\bml\b",
+        ],
+        "rest api": [
+            r"\brest api\b",
+            r"\brestful api\b",
+            r"\brestful services\b",
+        ],
+        "html": [r"\bhtml5?\b"],
+        "css": [r"\bcss3?\b"],
+        "javascript": [r"\bjavascript\b"],
+        "typescript": [r"\btypescript\b"],
+        "react": [r"\breact(?:\.js)?\b"],
+        "nodejs": [r"\bnodejs\b", r"\bnode\.js\b"],
+        "django": [r"\bdjango\b"],
+        "flask": [r"\bflask\b"],
+        "spring boot": [r"\bspring boot\b"],
+        "c++": [r"\bc\+\+\b", r"\bcplusplus\b"],
+        "c#": [r"\bc#\b", r"\bcsharp\b"],
+        "golang": [r"\bgolang\b", r"\bgo language\b"],
+        "testing": [
+            r"\bsoftware testing\b",
+            r"\btest automation\b",
+            r"\btesting\b",
+        ],
+        "database management": [
+            r"\bdatabase management\b",
+            r"\bdatabase design\b",
+            r"\bdbms\b",
+            r"\bmysql\b",
+            r"\bpostgresql\b",
+            r"\bsql server\b",
+        ],
+        "data science": [r"\bdata science\b"],
+        "power bi": [r"\bpower bi\b"],
+        "excel": [r"\bexcel\b", r"\bmicrosoft excel\b"],
+        "communication": [r"\bcommunication skills\b"],
+        "git": [r"\bgit\b", r"\bgithub\b"],
+        "docker": [r"\bdocker\b"],
+        "kubernetes": [r"\bkubernetes\b"],
+        "cybersecurity": [
+            r"\bcybersecurity\b",
+            r"\binformation security\b",
+        ],
+    }
+
+    def find_skill_matches(text, skills):
+        text = normalized_text(text)
+        matched = []
+
+        for skill in skills:
+            skill_name = normalized_text(skill)
+            if not skill_name:
+                continue
+
+            patterns = SKILL_ALIASES.get(skill_name)
+
+            if patterns is None:
+                # Never use substring matching for a skill.
+                patterns = [
+                    r"(?<!\w)" + re.escape(skill_name) + r"(?!\w)"
+                ]
+
+            if any(re.search(pattern, text) for pattern in patterns):
+                matched.append(skill)
+
+        return matched
+
+    def detected_technologies(text):
+        found = []
+
+        for skill_name in SKILL_ALIASES:
+            patterns = SKILL_ALIASES[skill_name]
+            if any(
+                re.search(pattern, normalized_text(text))
+                for pattern in patterns
+            ):
+                found.append(skill_name)
+
+        return found
+
+    # ------------------------------------------------------------
+    # 3. EXPERIENCE CLASSIFICATION
+    # ------------------------------------------------------------
+
+    def classify_experience(text):
+        text = normalized_text(text)
+
+        fresher_patterns = [
+            r"\bfresher\b",
+            r"\bfreshers\b",
+            r"\bentry.level\b",
+            r"\bgraduate trainee\b",
+            r"\brecent graduate\b",
+            r"\bno experience required\b",
+            r"\b0\s*(?:to|-)\s*1\s*years?\b",
+            r"\b0\s*years?\s+of\s+experience\b",
+        ]
+
+        if any(re.search(p, text) for p in fresher_patterns):
+            return {
+                "category": "Fresher-friendly",
+                "requirement": "Fresher or entry-level wording found",
+                "min_years": 0,
+            }
+
+        senior_patterns = [
+            r"\bsenior software engineer\b",
+            r"\bstaff engineer\b",
+            r"\bprincipal engineer\b",
+            r"\bengineering manager\b",
+            r"\bsoftware development manager\b",
+            r"\bteam lead\b",
+            r"\btechnical lead\b",
+            r"\btech lead\b",
+            r"\barchitect\b",
+            r"\b\d+\s*\+\s*years?\b",
+        ]
+
+        if any(re.search(p, text) for p in senior_patterns):
+            # A specific minimum is still extracted below if available.
+            category = "Review"
+        else:
+            category = "Unknown"
+
+        range_match = re.search(
+            r"\b(\d+(?:\.\d+)?)\s*(?:-|to)\s*"
+            r"(\d+(?:\.\d+)?)\s*\+?\s*years?\b",
+            text
+        )
+
+        if range_match:
+            minimum = float(range_match.group(1))
+            maximum = float(range_match.group(2))
+            return {
+                "category": "Fresher-friendly" if minimum <= 1 else "Review",
+                "requirement": (
+                    f"Requires approximately {minimum:g}–{maximum:g} years"
+                ),
+                "min_years": minimum,
+            }
+
+        plus_match = re.search(
+            r"\b(\d+(?:\.\d+)?)\s*\+\s*years?\b", text
+        )
+        if plus_match:
+            minimum = float(plus_match.group(1))
+            return {
+                "category": "Fresher-friendly" if minimum <= 1 else "Review",
+                "requirement": f"Requires {minimum:g}+ years",
+                "min_years": minimum,
+            }
+
+        single_match = re.search(
+            r"\b(?:minimum|min\.?|at least|over|more than)\s*"
+            r"(\d+(?:\.\d+)?)\s*years?\b",
+            text
+        )
+        if single_match:
+            minimum = float(single_match.group(1))
+            return {
+                "category": "Fresher-friendly" if minimum <= 1 else "Review",
+                "requirement": f"Requires at least {minimum:g} years",
+                "min_years": minimum,
+            }
+
+        if category == "Review":
+            return {
+                "category": "Review",
+                "requirement": "Possible senior-level role; verify requirements",
+                "min_years": None,
+            }
+
+        return {
+            "category": "Unknown",
+            "requirement": "Experience requirement not verified",
+            "min_years": None,
+        }
+
+    # ------------------------------------------------------------
+    # 4. LOAD PROFILE SKILLS
+    # ------------------------------------------------------------
 
     try:
         profile = get_student_profile() or {}
     except Exception:
-        st.warning(
-            "Could not load your saved profile. "
-            "You can still search for vacancies."
-        )
+        profile = {}
 
-    saved_skills = profile.get("skills", "")
+    if not isinstance(profile, dict):
+        profile = {}
 
-    if isinstance(saved_skills, list):
-        student_skills = list(dict.fromkeys(
-            str(skill).strip()
-            for skill in saved_skills
-            if str(skill).strip()
-        ))
-    else:
-        student_skills = list(dict.fromkeys(
-            skill.strip()
-            for skill in str(saved_skills or "").split(",")
-            if skill.strip()
-        ))
-
-    try:
-        saved_work_years = max(
-            0.0,
-            min(
-                50.0,
-                float(profile.get("work_experience_years") or 0)
-            )
-        )
-    except (TypeError, ValueError):
-        saved_work_years = 0.0
-
-    if student_skills:
-        st.write(
-            "**Your saved skills:** " + ", ".join(student_skills)
-        )
-    else:
-        st.warning(
-            "No saved skills found. Add skills in Student Profile "
-            "for personalized matching."
-        )
-
-    st.caption(
-        f"Full-time work experience saved in your profile: "
-        f"{saved_work_years:g} years"
+    saved_skills = get_first(
+        profile,
+        ["skills", "technical_skills", "student_skills"],
+        []
     )
 
-    # --------------------------------------------------------
-    # 2. SEARCH FORM
-    # --------------------------------------------------------
+    if isinstance(saved_skills, str):
+        # Support comma-separated skills from the profile.
+        saved_skills = [
+            item.strip()
+            for item in re.split(r"[,;\n]", saved_skills)
+            if item.strip()
+        ]
+    elif not isinstance(saved_skills, list):
+        saved_skills = []
+
+    saved_skills = list(dict.fromkeys(
+        clean_text(skill)
+        for skill in saved_skills
+        if clean_text(skill)
+    ))
+
+    experience_value = get_first(
+        profile,
+        ["experience_years", "work_experience", "experience"],
+        0
+    )
+
+    try:
+        saved_experience = float(
+            re.search(r"\d+(?:\.\d+)?", clean_text(experience_value)).group()
+        )
+    except (AttributeError, ValueError, TypeError):
+        saved_experience = 0.0
+
+    st.write("**Your saved skills:**", ", ".join(saved_skills) or "No skills saved")
+    st.write(
+        "**Full-time work experience saved in your profile:**",
+        f"{saved_experience:g} years"
+    )
+
+    # ------------------------------------------------------------
+    # 5. SEARCH FORM
+    # ------------------------------------------------------------
 
     with st.form("live_job_search_form"):
-
-        search_title = st.text_input(
+        query = st.text_input(
             "Job title or keywords",
-            value="software developer",
-            placeholder="Python developer, data analyst, AI engineer",
+            value="software developer"
         )
-
-        search_location = st.text_input(
-            "Location",
-            value="Bengaluru",
-            placeholder="Mangalore, Mysuru, Chennai, Hyderabad",
+        location = st.text_input("Location", value="Bengaluru")
+        max_results = st.selectbox(
+            "Maximum listings to retrieve per provider",
+            options=[5, 10, 20],
+            index=0
         )
-
-        search_experience = st.number_input(
-            "Your full-time work experience (years)",
-            min_value=0.0,
-            max_value=50.0,
-            value=float(saved_work_years),
-            step=0.5,
-            help=(
-                "Used for this search only. "
-                "It does not update your saved profile."
-            ),
+        fresher_priority = st.checkbox(
+            "Prioritize fresher and entry-level jobs",
+            value=True
         )
-
-        results_limit = st.selectbox(
-            "Number of vacancies to retrieve",
-            [5, 10, 20],
-            index=1,
-        )
-
-        fresher_only = st.checkbox(
-            "Show only likely fresher/entry-level jobs",
-            value=True,
-            help=(
-                "Shows listings with evidence of entry-level suitability. "
-                "Excludes senior/management titles, unclear experience "
-                "levels, and requirements exceeding one year."
-            ),
+        include_old = st.checkbox(
+            "Show listings older than 90 days in a separate section",
+            value=False
         )
 
         search_clicked = st.form_submit_button(
-            "🔍 Search Live Vacancies",
-            use_container_width=True,
+            "Search Jobs",
+            type="primary"
         )
 
-    # --------------------------------------------------------
-    # 3. FETCH LIVE ADZUNA RESULTS
-    # --------------------------------------------------------
+    # ------------------------------------------------------------
+    # 6. FETCH AND NORMALIZE PROVIDER RESULTS
+    # ------------------------------------------------------------
 
     if search_clicked:
-
-        st.session_state.pop("live_job_results", None)
-        st.session_state.pop("live_job_query", None)
-
-        if not search_title.strip() or not search_location.strip():
-            st.error("Enter both a job title and a location.")
-
+        if not query.strip() or not location.strip():
+            st.warning("Enter both a job title and location.")
         else:
-            try:
-                app_id = st.secrets["ADZUNA_APP_ID"]
-                app_key = st.secrets["ADZUNA_APP_KEY"]
+            all_jobs = []
+            adzuna_total = 0
+            jooble_total = 0
+            errors = []
 
-                api_url = (
-                    "https://api.adzuna.com/v1/api/jobs/in/search/1"
-                )
+            # Adzuna
+            app_id = st.secrets.get("ADZUNA_APP_ID", "")
+            app_key = st.secrets.get("ADZUNA_APP_KEY", "")
 
-                params = {
-                    "app_id": app_id,
-                    "app_key": app_key,
-                    "what": search_title.strip(),
-                    "where": search_location.strip(),
-                    "results_per_page": int(results_limit),
-                    "content-type": "application/json",
-                }
-
-                with st.spinner("Fetching live vacancies from Adzuna..."):
+            if app_id and app_key:
+                try:
                     response = requests.get(
-                        api_url,
-                        params=params,
-                        timeout=25,
+                        "https://api.adzuna.com/v1/api/jobs/in/search/1",
+                        params={
+                            "app_id": app_id,
+                            "app_key": app_key,
+                            "what": query.strip(),
+                            "where": location.strip(),
+                            "results_per_page": max_results,
+                            "content-type": "application/json",
+                        },
+                        timeout=20,
                     )
-
-                if response.status_code == 200:
-
+                    response.raise_for_status()
                     data = response.json()
+                    adzuna_total = data.get("count", 0)
 
-                    st.session_state["live_job_results"] = (
-                        data.get("results", [])
+                    for job in data.get("results", []):
+                        all_jobs.append(normalize_adzuna_job(job))
+
+                except Exception as exc:
+                    errors.append(f"Adzuna: {exc}")
+            else:
+                errors.append(
+                    "Adzuna credentials are missing from Streamlit Secrets."
+                )
+
+            # Jooble
+            try:
+                jooble_response = search_jooble(
+                    query.strip(), location.strip(), max_results
+                )
+
+                if isinstance(jooble_response, dict):
+                    jooble_total = jooble_response.get(
+                        "totalCount",
+                        jooble_response.get(
+                            "total", jooble_response.get("count", 0)
+                        )
                     )
 
-                    st.session_state["live_job_query"] = {
-                        "title": search_title.strip(),
-                        "location": search_location.strip(),
-                        "total": data.get("count", 0),
-                        "experience_years": float(search_experience),
-                        "fresher_only": bool(fresher_only),
-                        "results_limit": int(results_limit),
-                    }
-
-                else:
-                    st.error(
-                        f"Adzuna returned HTTP {response.status_code}. "
-                        "Check your API access and try again."
+                    jooble_jobs = jooble_response.get(
+                        "jobs",
+                        jooble_response.get(
+                            "data", jooble_response.get("results", [])
+                        )
                     )
 
-            except KeyError:
-                st.error(
-                    "Adzuna credentials are missing. Check "
-                    "ADZUNA_APP_ID and ADZUNA_APP_KEY in "
-                    ".streamlit/secrets.toml."
-                )
+                    if not isinstance(jooble_jobs, list):
+                        jooble_jobs = []
 
-            except requests.RequestException:
-                st.error(
-                    "Could not connect to Adzuna. Check your internet "
-                    "connection and try again."
-                )
+                    for job in jooble_jobs:
+                        if isinstance(job, dict):
+                            all_jobs.append(normalize_jooble_job(job))
 
-            except ValueError:
-                st.error(
-                    "Could not process the API response. "
-                    "Please try the search again."
-                )
+                elif isinstance(jooble_response, list):
+                    for job in jooble_response:
+                        if isinstance(job, dict):
+                            all_jobs.append(normalize_jooble_job(job))
 
             except Exception as exc:
-                st.error(
-                    "An unexpected error occurred while fetching "
-                    "vacancies. Check your configuration."
+                errors.append(f"Jooble: {exc}")
+
+            # Deduplicate across providers.
+            unique_jobs = []
+            seen_urls = set()
+            seen_fingerprints = set()
+
+            for job in all_jobs:
+                job["url"] = normalize_url(job.get("url", ""))
+
+                title_key = normalized_text(job.get("title", ""))
+                company_key = normalized_text(job.get("company", ""))
+                location_key = normalized_text(job.get("location", ""))
+
+                fingerprint = (
+                    title_key,
+                    company_key,
+                    location_key,
                 )
-                st.caption(f"Error details: {exc}")
 
-    # --------------------------------------------------------
-    # 4. SKILL CATALOGUE AND ALIASES
-    # --------------------------------------------------------
+                if job["url"] and job["url"] in seen_urls:
+                    continue
 
-    # Each canonical skill has common alternative spellings.
-    # A related technology is NOT automatically treated as a
-    # skill the student already knows.
+                if fingerprint in seen_fingerprints:
+                    continue
 
-    skill_aliases = {
-        "python": [
-            "python",
-            "python programming",
-            "python developer",
-        ],
-        "cloud computing": [
-            "cloud computing",
-            "cloud services",
-            "cloud infrastructure",
-            "cloud platform",
-            "cloud technology",
-        ],
-        "data analytics": [
-            "data analytics",
-            "data analysis",
-            "data analyst",
-            "business analytics",
-        ],
-        "data structures": [
-            "data structures",
-            "data structure",
-            "data structures and algorithms",
-            "data structure and algorithms",
-            "dsa",
-        ],
-        "java": [
-            "java",
-            "core java",
-            "java programming",
-        ],
-        "machine learning": [
-            "machine learning",
-            "machine learning models",
-        ],
-        "sql": [
-            "sql",
-            "sql queries",
-            "structured query language",
-        ],
-        "web development": [
-            "web development",
-            "web developer",
-            "frontend development",
-            "front-end development",
-            "backend development",
-            "back-end development",
-            "full stack development",
-            "full-stack development",
-        ],
-        "aws": [
-            "aws",
-            "amazon web services",
-        ],
-        "microsoft azure": [
-            "microsoft azure",
-            "azure",
-        ],
-        "google cloud": [
-            "google cloud",
-            "google cloud platform",
-            "gcp",
-        ],
-        "mysql": ["mysql"],
-        "postgresql": ["postgresql", "postgres"],
-        "pandas": ["pandas"],
-        "numpy": ["numpy"],
-        "power bi": ["power bi"],
-        "tableau": ["tableau"],
-        "excel": ["microsoft excel", "excel"],
-        "deep learning": ["deep learning"],
-        "natural language processing": [
-            "natural language processing",
-            "nlp",
-        ],
-        "html": ["html5", "html"],
-        "css": ["css3", "css"],
-        "javascript": ["javascript", "java script"],
-        "react": ["react.js", "reactjs", "react"],
-        "node.js": ["node.js", "nodejs"],
-        "django": ["django"],
-        "flask": ["flask"],
-        "rest apis": [
-            "restful apis",
-            "restful api",
-            "rest apis",
-            "rest api",
-        ],
-        "git": ["git", "git version control"],
-        "linux": ["linux"],
-        "docker": ["docker"],
-        "kubernetes": ["kubernetes"],
-        "cybersecurity": ["cybersecurity", "cyber security"],
-        "computer networks": [
-            "computer networks",
-            "computer networking",
-        ],
-        "statistics": ["statistics", "statistical analysis"],
-        "data visualization": ["data visualization"],
-        "communication": [
-            "communication skills",
-            "verbal communication",
-        ],
-        "agile": ["agile methodology", "agile"],
-        "c": ["c programming", "c language"],
-        "c++": ["c++", "cpp"],
-        "algorithms": ["algorithms", "algorithm design"],
-    }
+                if job["url"]:
+                    seen_urls.add(job["url"])
 
-    # These are related areas worth exploring, not proof of existing
-    # knowledge of each specific tool or technology.
+                seen_fingerprints.add(fingerprint)
+                unique_jobs.append(job)
 
-    related_skill_groups = {
-        "cloud computing": [
-            "aws",
-            "microsoft azure",
-            "google cloud",
-        ],
-        "data analytics": [
-            "pandas",
-            "numpy",
-            "power bi",
-            "tableau",
-            "excel",
-            "data visualization",
-            "sql",
-        ],
-        "data structures": [
-            "algorithms",
-        ],
-        "web development": [
-            "html",
-            "css",
-            "javascript",
-            "react",
-            "node.js",
-            "django",
-            "flask",
-            "rest apis",
-        ],
-        "machine learning": [
-            "deep learning",
-            "natural language processing",
-        ],
-        "sql": [
-            "mysql",
-            "postgresql",
-        ],
-    }
-
-    # --------------------------------------------------------
-    # 5. TEXT NORMALIZATION AND SKILL MATCHING
-    # --------------------------------------------------------
-
-    def normalize_skill_text(value):
-        """Normalize text for consistent keyword matching."""
-
-        value = str(value or "").casefold()
-
-        # Remove HTML tags that may be present in descriptions.
-        value = re.sub(r"<[^>]*>", " ", value)
-
-        # Standardize common dash characters.
-        value = value.replace("–", "-").replace("—", "-")
-
-        # Preserve C++, C#, and common technology punctuation.
-        value = re.sub(r"[^a-z0-9+#.]+", " ", value)
-
-        return " ".join(value.split())
-
-    def phrase_is_present(phrase, text):
-        """Match a complete phrase instead of part of a larger word."""
-
-        phrase = normalize_skill_text(phrase)
-        text = normalize_skill_text(text)
-
-        if not phrase or not text:
-            return False
-
-        phrase_pattern = r"\s+".join(
-            re.escape(part) for part in phrase.split()
-        )
-
-        return bool(
-            re.search(
-                r"(?<!\w)" + phrase_pattern + r"(?!\w)",
-                text,
-            )
-        )
-
-    def canonical_skill_name(skill):
-        """Convert known skill aliases to canonical catalogue names."""
-
-        normalized = normalize_skill_text(skill)
-
-        for canonical, aliases in skill_aliases.items():
-
-            if normalized == normalize_skill_text(canonical):
-                return canonical
-
-            for alias in aliases:
-                if normalized == normalize_skill_text(alias):
-                    return canonical
-
-        return normalized
-
-    def skill_is_in_text(skill, text):
-        """Check a skill against the listing and its known aliases."""
-
-        canonical = canonical_skill_name(skill)
-        aliases = skill_aliases.get(canonical, [skill])
-
-        candidates = list(dict.fromkeys([canonical] + aliases))
-
-        return any(
-            phrase_is_present(alias, text)
-            for alias in candidates
-        )
-
-    def get_profile_skill_names(skills):
-        """Return the canonical names of saved profile skills."""
-
-        return {
-            canonical_skill_name(skill)
-            for skill in skills
-            if normalize_skill_text(skill)
-        }
-
-    def detect_skills_in_listing(text):
-        """Find known catalogue skills in the available job text."""
-
-        detected = set()
-
-        for canonical, aliases in skill_aliases.items():
-
-            candidates = list(dict.fromkeys([canonical] + aliases))
-
-            if any(
-                phrase_is_present(alias, text)
-                for alias in candidates
-            ):
-                detected.add(canonical)
-
-        return detected
-
-    def analyze_job_skills(job_text, profile_skills):
-        """
-        Compare saved skills with the job listing.
-
-        The score is a keyword-match percentage, not a hiring
-        probability or a guarantee of eligibility.
-        """
-
-        matched = []
-        unmatched = []
-
-        for skill in profile_skills:
-
-            if skill_is_in_text(skill, job_text):
-                matched.append(skill)
-            else:
-                unmatched.append(skill)
-
-        if profile_skills:
-            score = len(matched) / len(profile_skills) * 100
-        else:
-            score = 0.0
-
-        detected = detect_skills_in_listing(job_text)
-        profile_names = get_profile_skill_names(profile_skills)
-
-        # Catalogue skills detected in the listing but not already
-        # represented by a canonical saved profile skill.
-        additional = detected - profile_names
-
-        # Related technologies are shown separately. For example,
-        # cloud computing can be related to AWS without proving
-        # that the student already knows AWS.
-        related = set()
-
-        for profile_skill in profile_names:
-
-            for related_skill in related_skill_groups.get(
-                profile_skill, []
-            ):
-
-                if (
-                    related_skill in detected
-                    and related_skill not in profile_names
-                ):
-                    related.add(related_skill)
-
-        additional = sorted(additional - related)
-
-        return {
-            "matched": matched,
-            "unmatched": unmatched,
-            "score": score,
-            "additional": additional,
-            "related": sorted(related),
-        }
-
-    # --------------------------------------------------------
-    # 6. EXPERIENCE REQUIREMENT DETECTION
-    # --------------------------------------------------------
-
-    entry_level_terms = [
-        "fresher",
-        "freshers",
-        "fresh graduate",
-        "recent graduate",
-        "graduate trainee",
-        "entry level",
-        "entry-level",
-        "junior developer",
-        "junior software",
-        "intern",
-        "internship",
-        "trainee",
-        "graduate program",
-        "graduate programme",
-        "campus hiring",
-    ]
-
-    senior_title_terms = [
-        "senior",
-        "staff engineer",
-        "principal engineer",
-        "lead developer",
-        "tech lead",
-        "team lead",
-        "engineering manager",
-        "development manager",
-        "software development manager",
-        "director",
-        "vice president",
-        "head of",
-        "architect",
-    ]
-
-    def detect_experience_requirement(title, description):
-        """
-        Detect common experience formats.
-
-        This is an estimate because job descriptions may mention
-        multiple roles, different experience levels, or unrelated
-        dates. Always verify the original vacancy.
-        """
-
-        text = normalize_skill_text(f"{title} {description}")
-
-        # First check for explicit ranges, such as 2-3 years.
-        range_matches = list(re.finditer(
-            r"(?<!\w)(\d+(?:\.\d+)?)\s*"
-            r"(?:-|to)\s*(\d+(?:\.\d+)?)\s*"
-            r"(?:years?|yrs?)(?!\w)",
-            text,
-        ))
-
-        if range_matches:
-
-            # Prefer a range that appears near an experience keyword.
-            selected_match = range_matches[0]
-
-            for candidate in range_matches:
-                surrounding = text[
-                    max(0, candidate.start() - 65):
-                    min(len(text), candidate.end() + 65)
-                ]
-
-                if any(term in surrounding for term in [
-                    "experience",
-                    "work experience",
-                    "relevant experience",
-                    "professional experience",
-                    "years of experience",
-                ]):
-                    selected_match = candidate
-                    break
-
-            minimum = float(selected_match.group(1))
-            maximum = float(selected_match.group(2))
-
-            if maximum < minimum:
-                minimum, maximum = maximum, minimum
-
-            return {
-                "requirement": f"{minimum:g}-{maximum:g} years",
-                "minimum_years": minimum,
-                "maximum_years": maximum,
-                "detected": True,
-                "broad_range": maximum > 1.0,
+            st.session_state["live_job_results"] = unique_jobs
+            st.session_state["live_job_search_info"] = {
+                "query": query.strip(),
+                "location": location.strip(),
+                "adzuna_total": adzuna_total,
+                "jooble_total": jooble_total,
+                "errors": errors,
+                "fresher_priority": fresher_priority,
+                "include_old": include_old,
+                "max_results": max_results,
             }
 
-        # Examples: 2+ years, 3+ yrs.
-        plus_match = re.search(
-            r"(?<!\w)(\d+(?:\.\d+)?)\s*\+\s*"
-            r"(?:years?|yrs?)(?!\w)",
-            text,
-        )
+    # ------------------------------------------------------------
+    # 7. DISPLAY RESULTS AND CONSISTENT COUNTS
+    # ------------------------------------------------------------
 
-        if plus_match:
-            minimum = float(plus_match.group(1))
+    if "live_job_results" in st.session_state:
+        jobs = st.session_state["live_job_results"]
+        info = st.session_state.get("live_job_search_info", {})
 
-            return {
-                "requirement": f"{minimum:g}+ years",
-                "minimum_years": minimum,
-                "maximum_years": None,
-                "detected": True,
-                "broad_range": False,
-            }
-
-        # Examples: 2 years of experience, 1 year relevant experience.
-        experience_match = re.search(
-            r"(?<!\w)(\d+(?:\.\d+)?)\s*"
-            r"(?:years?|yrs?)\s*(?:of\s+)?"
-            r"(?:(?:relevant|professional|full[- ]time|work)\s+)*"
-            r"experience(?!\w)",
-            text,
-        )
-
-        if experience_match:
-            minimum = float(experience_match.group(1))
-
-            return {
-                "requirement": f"{minimum:g} years",
-                "minimum_years": minimum,
-                "maximum_years": None,
-                "detected": True,
-                "broad_range": False,
-            }
-
-        # Examples: minimum 2 years, at least 1 year.
-        minimum_match = re.search(
-            r"(?:minimum|min\.?|at least|requires?|requiring)"
-            r"\s+(?:of\s+)?(\d+(?:\.\d+)?)\s*"
-            r"(?:years?|yrs?)(?!\w)",
-            text,
-        )
-
-        if minimum_match:
-            minimum = float(minimum_match.group(1))
-
-            return {
-                "requirement": f"{minimum:g}+ years",
-                "minimum_years": minimum,
-                "maximum_years": None,
-                "detected": True,
-                "broad_range": False,
-            }
-
-        # Entry-level language is evidence, not a guarantee.
-        if any(
-            phrase_is_present(term, text)
-            for term in entry_level_terms
-        ):
-            return {
-                "requirement": "Entry-level wording detected",
-                "minimum_years": 0.0,
-                "maximum_years": 1.0,
-                "detected": True,
-                "broad_range": False,
-            }
-
-        return {
-            "requirement": "Not specified in listing text",
-            "minimum_years": None,
-            "maximum_years": None,
-            "detected": False,
-            "broad_range": False,
-        }
-
-    def classify_job_level(title, experience_info):
-        """Classify the likely level and determine fresher eligibility."""
-
-        title_text = normalize_skill_text(title)
-
-        is_senior = any(
-            phrase_is_present(term, title_text)
-            for term in senior_title_terms
-        )
-
-        is_entry_title = any(
-            phrase_is_present(term, title_text)
-            for term in entry_level_terms
-        )
-
-        minimum = experience_info["minimum_years"]
-        maximum = experience_info["maximum_years"]
-
-        # Senior/management titles are excluded from fresher results.
-        if is_senior:
-            return {
-                "label": "Likely senior/management role",
-                "rank": 3,
-                "fresher_eligible": False,
-                "reason": "Senior or management wording in title",
-            }
-
-        # A stated minimum greater than one year is not treated
-        # as a likely fresher role.
-        if (
-            experience_info["detected"]
-            and minimum is not None
-            and minimum > 1
-        ):
-            return {
-                "label": "Likely experienced role",
-                "rank": 2,
-                "fresher_eligible": False,
-                "reason": "Minimum experience exceeds one year",
-            }
-
-        # A clearly stated range within 0-1 years is a candidate.
-        if (
-            experience_info["detected"]
-            and maximum is not None
-            and maximum <= 1
-        ):
-            return {
-                "label": "Potential fresher/entry-level role",
-                "rank": 0,
-                "fresher_eligible": True,
-                "reason": "Stated experience range is within 0-1 years",
-            }
-
-        # A clearly entry-level title with no detected experience
-        # requirement can be included for manual verification.
-        if is_entry_title and not experience_info["detected"]:
-            return {
-                "label": "Potential fresher/entry-level role",
-                "rank": 0,
-                "fresher_eligible": True,
-                "reason": "Entry-level wording; verify description",
-            }
-
-        # A broad range such as 0-5 years is not proof that a
-        # vacancy is suitable for freshers.
-        if (
-            experience_info["detected"]
-            and minimum is not None
-            and maximum is not None
-            and minimum <= 1
-            and maximum > 1
-        ):
-            return {
-                "label": "Broad experience range - verify",
-                "rank": 1,
-                "fresher_eligible": False,
-                "reason": "Range includes experience beyond one year",
-            }
-
-        return {
-            "label": "Experience level not confirmed",
-            "rank": 1,
-            "fresher_eligible": False,
-            "reason": "Insufficient evidence of fresher eligibility",
-        }
-
-    # --------------------------------------------------------
-    # 7. LOAD THE LATEST SEARCH RESULTS
-    # --------------------------------------------------------
-
-    live_jobs = st.session_state.get("live_job_results", [])
-    query_info = st.session_state.get("live_job_query", {})
-
-    if query_info:
+        # Use the settings from the latest search.
+        fresher_priority = info.get("fresher_priority", True)
+        include_old = info.get("include_old", False)
 
         st.subheader("Search Results")
-
         st.write(
-            f"Search: **{query_info['title']}** "
-            f"in **{query_info['location']}**"
+            f"Search: **{info.get('query', '')}** in "
+            f"**{info.get('location', '')}**"
         )
 
-        st.caption(
-            f"Total results reported by Adzuna: "
-            f"{query_info['total']}"
+        for error in info.get("errors", []):
+            st.warning(error)
+
+        st.write("### Provider totals")
+        col1, col2, col3 = st.columns(3)
+        col1.metric(
+            "Adzuna reported total",
+            f"{info.get('adzuna_total', 0):,}"
         )
-
-        st.caption(
-            f"Listings retrieved from Adzuna: {len(live_jobs)}"
+        col2.metric(
+            "Jooble reported total",
+            f"{info.get('jooble_total', 0):,}"
         )
+        col3.metric("Unique listings retrieved", len(jobs))
 
-        student_work_years = float(
-            query_info.get(
-                "experience_years",
-                saved_work_years,
-            )
-        )
+        now = datetime.now(timezone.utc)
+        recent_jobs = []
+        undated_jobs = []
+        old_jobs = []
+        experience_filtered = []
 
-        # ----------------------------------------------------
-        # 8. ANALYZE EACH LISTING
-        # ----------------------------------------------------
+        # Classify date and experience independently.
+        for job in jobs:
+            posted = parse_posted_date(job.get("posted"))
+            job["parsed_posted"] = posted
 
-        prepared_jobs = []
-
-        for job in live_jobs:
-
-            title = job.get("title") or "Job title not provided"
-            description = job.get("description") or ""
-
-            company_data = job.get("company") or {}
-            company = company_data.get(
-                "display_name",
-                "Company not listed",
-            )
-
-            location_data = job.get("location") or {}
-            location = location_data.get(
-                "display_name",
-                "Location not listed",
-            )
-
-            # Analyze only text returned by Adzuna.
-            job_text = f"{title} {description}"
-
-            skill_analysis = analyze_job_skills(
-                job_text,
-                student_skills,
-            )
-
-            experience_info = detect_experience_requirement(
-                title,
-                description,
-            )
-
-            level_info = classify_job_level(
-                title,
-                experience_info,
-            )
-
-            minimum = experience_info["minimum_years"]
-            maximum = experience_info["maximum_years"]
-
-            # Compare the user's entered years with the detected
-            # minimum/maximum, where available.
-            if not experience_info["detected"]:
-
-                experience_comparison = (
-                    "Experience requirement unknown"
-                )
-
-                experience_category = "unknown"
-
-            elif (
-                maximum is not None
-                and student_work_years > maximum
-            ):
-
-                experience_comparison = (
-                    "Your experience is above the stated range; verify"
-                )
-
-                experience_category = "above_range"
-
-            elif (
-                minimum is not None
-                and student_work_years >= minimum
-            ):
-
-                experience_comparison = (
-                    "Stated minimum experience appears to match"
-                )
-
-                experience_category = "match"
-
+            if posted is None:
+                job["date_group"] = "undated"
+                job["date_label"] = "Date not verified"
+                undated_jobs.append(job)
             else:
+                age_days = (now - posted).total_seconds() / 86400
 
-                experience_comparison = (
-                    "May need more work experience"
-                )
+                if age_days < 0:
+                    job["date_group"] = "undated"
+                    job["date_label"] = "Posting date needs verification"
+                    undated_jobs.append(job)
+                elif age_days > 90:
+                    job["date_group"] = "old"
+                    job["date_label"] = posted.strftime("%d %b %Y")
+                    old_jobs.append(job)
+                else:
+                    job["date_group"] = "recent"
+                    job["date_label"] = posted.strftime("%d %b %Y")
+                    recent_jobs.append(job)
 
-                experience_category = "more"
-
-            prepared_jobs.append({
-                "job": job,
-                "title": title,
-                "company": company,
-                "location": location,
-                "description": description,
-                "skill_analysis": skill_analysis,
-                "experience_info": experience_info,
-                "experience_comparison": experience_comparison,
-                "experience_category": experience_category,
-                "level_info": level_info,
-            })
-
-        # ----------------------------------------------------
-        # 9. APPLY FRESHER FILTER
-        # ----------------------------------------------------
-
-        filter_is_active = query_info.get("fresher_only", True)
-
-        if filter_is_active:
-
-            displayed_jobs = [
-                item for item in prepared_jobs
-                if (
-            item["level_info"]["fresher_eligible"]
-            or (
-                item["experience_info"]["detected"]
-                and item["experience_info"]["minimum_years"] is not None
-                and item["experience_info"]["minimum_years"] <= 2
-                and item["level_info"]["label"]
-                not in [
-                    "Likely senior/management role",
-                    "Likely experienced role",
-                ]
+            text_for_analysis = (
+                clean_text(job.get("title", ""))
+                + " "
+                + clean_text(job.get("description", ""))
             )
-        )
+
+            exp = classify_experience(text_for_analysis)
+            job["experience_category"] = exp["category"]
+            job["experience_requirement"] = exp["requirement"]
+            job["minimum_experience"] = exp["min_years"]
+
+            job["matching_skills"] = find_skill_matches(
+                text_for_analysis, saved_skills
+            )
+
+            job["missing_skills"] = [
+                skill for skill in saved_skills
+                if skill not in job["matching_skills"]
             ]
 
-        else:
-            displayed_jobs = prepared_jobs
+            job["technologies"] = detected_technologies(text_for_analysis)
 
-        # Show stronger keyword matches first within the eligible
-        # set. This is a display order, not a selection prediction.
-        displayed_jobs.sort(
-            key=lambda item: (
-                item["level_info"]["rank"],
-                -item["skill_analysis"]["score"],
-            )
+            if saved_skills:
+                job["skill_overlap"] = round(
+                    100 * len(job["matching_skills"]) / len(saved_skills)
+                )
+            else:
+                job["skill_overlap"] = 0
+
+            # Experience filtering does not alter date classification.
+            is_excluded = False
+
+            if fresher_priority:
+                if job["experience_category"] == "Review":
+                    is_excluded = True
+                elif (
+                    job["minimum_experience"] is not None
+                    and job["minimum_experience"] > 1
+                ):
+                    is_excluded = True
+
+            job["experience_excluded"] = is_excluded
+
+            if is_excluded:
+                experience_filtered.append(job)
+
+        # Count eligible listings by date group.
+        def eligible(items):
+            return [
+                job for job in items
+                if not job.get("experience_excluded", False)
+            ]
+
+        eligible_recent = eligible(recent_jobs)
+        eligible_undated = eligible(undated_jobs)
+        eligible_old = eligible(old_jobs)
+
+        visible_old = eligible_old if include_old else []
+
+        displayed_jobs = (
+            eligible_recent
+            + eligible_undated
+            + visible_old
         )
 
-        st.write(
-            "**Fresher-only filter:** "
-            + ("ON" if filter_is_active else "OFF")
+        st.subheader("Result Summary")
+
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Recent listings", len(recent_jobs))
+        m2.metric("Undated listings", len(undated_jobs))
+        m3.metric("Displayed listings", len(displayed_jobs))
+
+        m4, m5, m6 = st.columns(3)
+        m4.metric("Old listings found", len(old_jobs))
+        m5.metric("Experience-filtered listings", len(experience_filtered))
+        m6.metric(
+            "Old listings hidden",
+            len(eligible_old) if not include_old else 0
         )
 
         st.caption(
-            f"{len(prepared_jobs) - len(displayed_jobs)} "
-            "retrieved listings excluded by the active filter."
+            "Date counts classify every unique listing independently of "
+            "experience filtering. Experience-filtered listings may overlap "
+            "with recent, undated, or old date groups."
         )
 
-        if filter_is_active:
-            st.caption(
-                "The filter excludes senior/management titles, "
-                "unknown-level listings, and roles whose detected "
-                "experience range exceeds one year. It may miss "
-                "suitable jobs when descriptions are incomplete."
+        old_experience_excluded = sum(
+            1 for job in old_jobs if job.get("experience_excluded")
+        )
+
+        if old_experience_excluded:
+            st.info(
+                f"{old_experience_excluded} old listing(s) are also excluded "
+                "by the experience filter. They are counted in the "
+                "experience-filtered group, not the old-listings-hidden count."
             )
 
-        # ----------------------------------------------------
-        # 10. EXPERIENCE SUMMARY
-        # ----------------------------------------------------
-
-        st.subheader("Experience-Based Vacancy Summary")
-
-        st.write(
-            f"**Your experience used for comparison:** "
-            f"{student_work_years:g} years"
-        )
-
-        st.caption(
-            "Counts below refer to the listings shown after filtering."
-        )
-
-        col1, col2 = st.columns(2)
-
-        col1.metric(
-            "Listings Retrieved",
-            len(prepared_jobs),
-        )
-
-        col2.metric(
-            "Listings Shown",
-            len(displayed_jobs),
-        )
-
-        col3, col4 = st.columns(2)
-
-        col3.metric(
-            "Minimum Experience Appears to Match",
-            sum(
-                item["experience_category"] == "match"
-                for item in displayed_jobs
-            ),
-        )
-
-        col4.metric(
-            "May Need More Experience",
-            sum(
-                item["experience_category"] == "more"
-                for item in displayed_jobs
-            ),
-        )
-
-        # ----------------------------------------------------
-        # 11. EMPTY RESULTS HANDLING
-        # ----------------------------------------------------
-
-        if not displayed_jobs and filter_is_active:
-
-            st.warning(
-                "No retrieved listings passed the strict fresher "
-                "filter. Try a more specific entry-level job title, "
-                "retrieve more vacancies, or turn off the fresher "
-                "filter to inspect all retrieved listings."
+        if fresher_priority:
+            st.info(
+                f"Fresher prioritization is on. "
+                f"{len(experience_filtered)} listing(s) are excluded from "
+                "the main results because their experience classification "
+                "suggests they may not suit entry-level applicants."
             )
 
-        elif not displayed_jobs:
+        # --------------------------------------------------------
+        # 8. JOB CARD DISPLAY
+        # --------------------------------------------------------
 
-            st.warning(
-                "No listings were returned. Try broader job keywords "
-                "or check the location spelling."
+        def display_job(job):
+            st.markdown("---")
+            st.subheader(job["title"])
+
+            st.write("**Company:**", job["company"])
+            st.write("**Location:**", job["location"])
+            st.write("**Source:**", job["source"])
+            st.write("**Posted:**", job["date_label"])
+            st.write(
+                "**Experience classification:**",
+                job["experience_category"]
+            )
+            st.write("**Experience requirement:**", job["experience_requirement"])
+            st.write(
+                "**Estimated skill overlap:**",
+                f"{job['skill_overlap']}%"
             )
 
-        # ----------------------------------------------------
-        # 12. DISPLAY JOB CARDS
-        # ----------------------------------------------------
+            st.write(
+                "**Your matching skills:**",
+                ", ".join(job["matching_skills"])
+                if job["matching_skills"]
+                else "No direct keyword match found"
+            )
 
-        for item in displayed_jobs:
-
-            job = item["job"]
-            title = item["title"]
-            company = item["company"]
-            location = item["location"]
-            description = item["description"]
-
-            analysis = item["skill_analysis"]
-
-            matched_skills = analysis["matched"]
-            unmatched_skills = analysis["unmatched"]
-            additional_skills = analysis["additional"]
-            related_skills = analysis["related"]
-            score = analysis["score"]
-
-            experience_info = item["experience_info"]
-            level_info = item["level_info"]
-
-            job_url = job.get("redirect_url") or ""
-
-            with st.container(border=True):
-
-                st.markdown(f"### {title}")
-
-                st.write(f"**Company:** {company}")
-                st.write(f"**Location:** {location}")
-
+            if job["missing_skills"]:
                 st.write(
-                    "**Role classification:** "
-                    + level_info["label"]
+                    "**Saved skills not detected in this listing:**",
+                    ", ".join(job["missing_skills"])
                 )
 
+            if job["technologies"]:
                 st.write(
-                    "**Experience requirement:** "
-                    + experience_info["requirement"]
+                    "**Technologies detected in the listing:**",
+                    ", ".join(job["technologies"])
                 )
 
-                st.write(
-                    "**Experience comparison:** "
-                    + item["experience_comparison"]
-                )
-
-                # --------------------------------------------
-                # A. STUDENT SKILL MATCH SCORE
-                # --------------------------------------------
-
-                if student_skills:
-
-                    st.progress(
-                        min(max(score / 100.0, 0.0), 1.0)
-                    )
-
-                    st.write(
-                        f"**Student skill keyword-match score:** "
-                        f"{score:.1f}%"
-                    )
-
-                    st.caption(
-                        "This score measures exact or alias-based "
-                        "keyword matches between your saved skills "
-                        "and the job title and description returned "
-                        "by Adzuna. Missing keywords do not prove that "
-                        "you lack a skill or are unqualified. This is "
-                        "not a probability of getting selected."
-                    )
-
-                    if matched_skills:
-
-                        st.success(
-                            "**Student skills found in listing:** "
-                            + ", ".join(matched_skills)
-                        )
-
-                    else:
-
-                        st.write(
-                            "**Student skills found in listing:** "
-                            "None detected"
-                        )
-
-                    if unmatched_skills:
-
-                        st.write(
-                            "**Student skills not found in listing:** "
-                            + ", ".join(unmatched_skills)
-                        )
-
-                    else:
-
-                        st.write(
-                            "**Student skills not found in listing:** "
-                            "None"
-                        )
-
-                else:
-
-                    st.info(
-                        "Add skills to your student profile to "
-                        "calculate a personalized keyword-match score."
-                    )
-
-                # --------------------------------------------
-                # B. POTENTIAL SKILLS TO LEARN
-                # --------------------------------------------
-
-                st.markdown("**Potential skills to learn**")
-
-                if additional_skills:
-
-                    st.write(", ".join(additional_skills))
-
-                    st.caption(
-                        "These catalogue skills were detected in "
-                        "the listing but are not represented by a "
-                        "matching skill in your saved profile. They "
-                        "are possible learning topics, not confirmed "
-                        "mandatory requirements."
-                    )
-
-                else:
-
-                    st.write(
-                        "No additional catalogued skills were detected."
-                    )
-
-                # --------------------------------------------
-                # C. RELATED TECHNOLOGIES
-                # --------------------------------------------
-
-                if related_skills:
-
-                    st.markdown(
-                        "**Related technologies to explore**"
-                    )
-
-                    st.write(", ".join(related_skills))
-
-                    st.caption(
-                        "These technologies are related to a broader "
-                        "skill in your profile. For example, cloud "
-                        "computing is related to AWS, but that does "
-                        "not prove that you already know AWS."
-                    )
-
-                # --------------------------------------------
-                # D. ORIGINAL JOB DESCRIPTION
-                # --------------------------------------------
-
+            if job.get("description"):
                 with st.expander("View job description"):
+                    st.write(job["description"])
 
-                    st.write(
-                        description
-                        or "No description was provided by the API."
-                    )
+            if job.get("url"):
+                st.markdown(f"[View original vacancy]({job['url']})")
+            else:
+                st.caption("Original vacancy URL was not provided by the API.")
 
-                # --------------------------------------------
-                # E. ORIGINAL ADZUNA VACANCY
-                # --------------------------------------------
+        st.subheader(f"Recent Listings ({len(eligible_recent)})")
+        if eligible_recent:
+            for job in eligible_recent:
+                display_job(job)
+        else:
+            st.info("No eligible recent listings were found.")
 
-                if job_url:
+        st.subheader(f"Undated Listings ({len(eligible_undated)})")
+        if eligible_undated:
+            st.caption(
+                "These listings do not have a verifiable posting date. "
+                "They are not automatically treated as recent."
+            )
+            for job in eligible_undated:
+                display_job(job)
+        else:
+            st.info("No eligible listings with an unverified posting date were found.")
 
-                    st.link_button(
-                        "View vacancy on Adzuna",
-                        job_url,
-                        use_container_width=True,
-                    )
+        if include_old:
+            st.subheader(f"Older Listings — over 90 days ({len(eligible_old)})")
+            if eligible_old:
+                for job in eligible_old:
+                    display_job(job)
+            else:
+                st.info("No eligible listings older than 90 days were found.")
+        else:
+            st.caption(
+                f"{len(eligible_old)} eligible listing(s) older than 90 days "
+                "are hidden. Enable the checkbox above and search again to "
+                "show them in a separate section."
+            )
 
+        if fresher_priority:
+            st.subheader(
+                f"Experience-filtered Listings ({len(experience_filtered)})"
+            )
+            if experience_filtered:
                 st.caption(
-                    "Check the original listing for mandatory skills, "
-                    "education, graduation year, experience, and "
-                    "application eligibility before applying."
+                    "These are excluded from the main results because the "
+                    "role appears to require more experience or may be senior-level."
                 )
-
-    # --------------------------------------------------------
-    # 13. INITIAL EMPTY STATE
-    # --------------------------------------------------------
-
-    else:
+                with st.expander("View experience-filtered listings"):
+                    for job in experience_filtered:
+                        st.markdown(f"**{job['title']}**")
+                        st.write("Company:", job["company"])
+                        st.write("Location:", job["location"])
+                        st.write("Posted:", job["date_label"])
+                        st.write(
+                            "Experience:",
+                            job["experience_requirement"]
+                        )
+                        if job.get("url"):
+                            st.markdown(
+                                f"[View original vacancy]({job['url']})"
+                            )
+                        st.markdown("---")
 
         st.caption(
-            "Enter a job title and location, set your work "
-            "experience, and select 'Search Live Vacancies' "
-            "to retrieve listings."
+            "Provider totals are reported counts, not the number of listings "
+            "retrieved. Duplicate removal uses normalized URLs or title, "
+            "company, and location. Skill scores are keyword-overlap estimates, "
+            "not selection probabilities. Undated listings are kept separate "
+            "from recent listings. Verify experience, posting dates, and "
+            "availability on the original vacancy page."
         )
 
-
+    st.markdown("---")
+    st.caption(
+        "PlacementAI · Student Placement & Career Support Platform"
+    )
 
 # ============================================================
 # CLOUD STORAGE
@@ -2843,6 +2567,23 @@ elif page == "☁️ Cloud Storage":
                 st.write("**Course:**", profile.get("course", ""))
                 st.write("**Graduation year:**", profile.get("graduation_year", ""))
                 st.write("**Skills:**", profile.get("skills", ""))
+                st.write(
+                    f"**Experience level:** "
+                    f"{profile.get('experience_level') or 'Not specified'}"
+                )
+                st.write(
+                    f"**Work experience:** "
+                    f"{profile.get('work_experience_years', 0)} years"
+                )
+                st.write(
+                         f"**Internship experience:** "
+                          f"{profile.get('internship_experience_months', 0)} months"
+                        )
+
+                st.write(
+                        f"**Project experience:** "
+                         f"{profile.get('project_experience') or 'Not specified'}"
+                        )
             else:
                 st.info("No profile saved yet.")
         except Exception as error:
