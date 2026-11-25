@@ -304,6 +304,63 @@ job_titles = sorted(
     if title.strip()
 )
 
+def get_grouped_feature_importance(model, input_columns):
+    """Return Random Forest importance grouped by original input feature."""
+    try:
+        if not hasattr(model, "named_steps"):
+            return None
+
+        preprocessor = model.named_steps.get("preprocessor")
+        classifier = model.named_steps.get("classifier")
+
+        if preprocessor is None or classifier is None:
+            return None
+
+        if not hasattr(classifier, "feature_importances_"):
+            return None
+
+        transformed_names = preprocessor.get_feature_names_out()
+        importances = classifier.feature_importances_
+
+        if len(transformed_names) != len(importances):
+            return None
+
+        grouped = {column: 0.0 for column in input_columns}
+
+        for transformed_name, importance in zip(
+            transformed_names, importances
+        ):
+            # Remove the transformer prefix, such as "num__".
+            clean_name = transformed_name.split("__", 1)[-1]
+
+            # Group one-hot encoded columns under their original feature.
+            matches = [
+                column
+                for column in input_columns
+                if clean_name == column
+                or clean_name.startswith(f"{column}_")
+            ]
+
+            if matches:
+                original_column = max(matches, key=len)
+                grouped[original_column] += float(importance)
+
+        result = pd.DataFrame(
+            [
+                {"Feature": feature, "Importance": importance}
+                for feature, importance in grouped.items()
+            ]
+        )
+
+        result = result.sort_values(
+            "Importance", ascending=False
+        ).reset_index(drop=True)
+
+        return result
+
+    except (AttributeError, KeyError, TypeError, ValueError):
+        return None
+
 
 # ============================================================
 # CLOUD STORAGE HELPERS
@@ -956,6 +1013,89 @@ elif page == "📊 Placement Prediction":
 
                     st.caption(str(error))
 
+
+    # ============================================================
+    # PREDICTION EXPLAINABILITY
+    # ============================================================
+
+    st.markdown("---")
+    st.subheader("🔍 Understanding Placement Predictions")
+
+    st.write(
+        "Explore which academic and preparation-related factors "
+        "the trained model relies on when making predictions."
+    )
+
+    importance_df = get_grouped_feature_importance(
+        model, feature_columns
+    )
+
+    if importance_df is not None and not importance_df.empty:
+        importance_df["Importance (%)"] = (
+            importance_df["Importance"] * 100
+        )
+
+        st.markdown("#### Overall Feature Importance")
+
+        chart_df = importance_df.set_index("Feature")[
+            "Importance (%)"
+        ]
+
+        st.bar_chart(chart_df.head(10))
+
+        st.caption(
+            "Higher values mean the model relied more on that feature "
+            "across its trees. This does not mean the feature causes "
+            "placement or guarantees a particular outcome."
+        )
+
+        st.markdown("#### Top Factors Used by the Model")
+
+        top_features = importance_df.head(5)
+
+        for _, row in top_features.iterrows():
+            st.write(
+                f"- **{row['Feature'].replace('_', ' ').title()}**: "
+                f"{row['Importance (%)']:.2f}% importance"
+            )
+
+    else:
+        st.info(
+            "Feature importance is unavailable for the loaded model. "
+            "The prediction feature will continue to work normally."
+        )
+
+    latest_explanation = st.session_state.get(
+        "latest_placement_prediction"
+    )
+
+    if latest_explanation:
+        st.markdown("#### Explanation of Your Latest Prediction")
+
+        st.write(
+            f"The model predicted **{latest_explanation['prediction']}** "
+            "using the details entered in the prediction form."
+        )
+
+        if latest_explanation.get("confidence") is not None:
+            st.write(
+                f"Model confidence score: "
+                f"**{latest_explanation['confidence']:.2f}%**"
+            )
+
+        with st.expander("View the details used for this prediction"):
+            details_df = pd.DataFrame(
+                list(latest_explanation["input_data"].items()),
+                columns=["Input Feature", "Entered Value"],
+            )
+            st.dataframe(details_df, use_container_width=True)
+
+        st.caption(
+            "The feature-importance chart explains overall model "
+            "behaviour; it does not calculate each feature's individual "
+            "contribution to this particular prediction. The confidence "
+            "score is not a guarantee of actual placement."
+        )
 
 # ============================================================
 # JOB ROLE RECOMMENDATIONS
